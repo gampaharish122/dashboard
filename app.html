@@ -408,6 +408,52 @@
             });
         }
 
+        function parseQuarter(quarterStr) {
+            // Handle various quarter formats and convert to "Q# YYYY" format
+            if (!quarterStr) return { formatted: '', sortKey: '' };
+            
+            const str = quarterStr.toString().trim();
+            
+            // Match patterns like "Q1 2023", "2023 Q1", "2023Q1", "Q1-2023", etc.
+            const patterns = [
+                /^Q([1-4])\s*(\d{4})$/i,           // Q1 2023
+                /^(\d{4})\s*Q([1-4])$/i,           // 2023 Q1
+                /^(\d{4})Q([1-4])$/i,              // 2023Q1
+                /^Q([1-4])-(\d{4})$/i,             // Q1-2023
+                /^Q([1-4])_(\d{4})$/i,             // Q1_2023
+                /^([1-4])Q(\d{4})$/i,              // 1Q2023
+                /^(\d{4})-Q([1-4])$/i,             // 2023-Q1
+                /^(\d{4})_Q([1-4])$/i              // 2023_Q1
+            ];
+            
+            for (let pattern of patterns) {
+                const match = str.match(pattern);
+                if (match) {
+                    let quarter, year;
+                    
+                    // Determine which group is quarter and which is year
+                    if (match[1].length === 4) {
+                        // First group is year
+                        year = match[1];
+                        quarter = match[2];
+                    } else {
+                        // First group is quarter
+                        quarter = match[1];
+                        year = match[2];
+                    }
+                    
+                    const formatted = `Q${quarter} ${year}`;
+                    const sortKey = `${year}Q${quarter}`;
+                    
+                    return { formatted, sortKey };
+                }
+            }
+            
+            // If no pattern matches, return original
+            console.warn(`Could not parse quarter format: ${quarterStr}`);
+            return { formatted: str, sortKey: str };
+        }
+
         function validateAndInitialize() {
             if (globalData.length === 0) {
                 document.getElementById('loading').innerHTML = '<p>❌ No data found in file.</p>';
@@ -441,6 +487,13 @@
                     }
                 });
             }
+
+            // Parse and format quarters
+            globalData.forEach(row => {
+                const parsedQuarter = parseQuarter(row.quarter);
+                row.quarter_formatted = parsedQuarter.formatted;
+                row.quarter_sort_key = parsedQuarter.sortKey;
+            });
             
             console.log('Sample data after processing:', globalData.slice(0, 3)); // Debug log
 
@@ -631,10 +684,15 @@
 
             // Apply quarter filtering
             if (quarterRange !== 'all' && !isOverallView) {
-                const quarters = [...new Set(filteredData.map(row => row.quarter))].sort();
+                // Get unique quarters sorted by sort key
+                const quarters = [...new Set(filteredData.map(row => ({ 
+                    formatted: row.quarter_formatted, 
+                    sortKey: row.quarter_sort_key 
+                })))].sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+                
                 const numQuarters = parseInt(quarterRange.replace('recent', ''));
-                const recentQuarters = quarters.slice(-numQuarters);
-                filteredData = filteredData.filter(row => recentQuarters.includes(row.quarter));
+                const recentQuarters = quarters.slice(-numQuarters).map(q => q.formatted);
+                filteredData = filteredData.filter(row => recentQuarters.includes(row.quarter_formatted));
             }
 
             updateSummaryCards(filteredData);
@@ -728,15 +786,25 @@
             
             // Group data by quarter and calculate sums
             const quarterData = data.reduce((acc, row) => {
-                const quarter = row.quarter;
+                const quarter = row.quarter_formatted;
                 if (!acc[quarter]) acc[quarter] = [];
                 acc[quarter].push(row);
                 return acc;
             }, {});
 
-            const quarters = Object.keys(quarterData).sort();
+            // Sort quarters by their sort keys
+            const quarterEntries = Object.entries(quarterData);
+            quarterEntries.sort((a, b) => {
+                const aSortKey = data.find(row => row.quarter_formatted === a[0])?.quarter_sort_key || a[0];
+                const bSortKey = data.find(row => row.quarter_formatted === b[0])?.quarter_sort_key || b[0];
+                return aSortKey.localeCompare(bSortKey);
+            });
+
+            const quarters = quarterEntries.map(entry => entry[0]);
+            const sortedQuarterData = Object.fromEntries(quarterEntries);
+
             const sumValues = quarters.map(quarter => {
-                const values = quarterData[quarter].map(row => row[metric]).filter(val => val !== null && val !== undefined);
+                const values = sortedQuarterData[quarter].map(row => row[metric]).filter(val => val !== null && val !== undefined);
                 return values.reduce((sum, val) => sum + val, 0);
             });
 
@@ -759,7 +827,7 @@
             if (compareWith !== 'none') {
                 const compareData = globalData.filter(row => row.company === compareWith);
                 const compareQuarterData = compareData.reduce((acc, row) => {
-                    const quarter = row.quarter;
+                    const quarter = row.quarter_formatted;
                     if (!acc[quarter]) acc[quarter] = [];
                     acc[quarter].push(row);
                     return acc;
@@ -796,7 +864,7 @@
                     const industryData = globalData.filter(row => row.primary_industry === companyIndustry);
                     
                     const industryQuarterData = industryData.reduce((acc, row) => {
-                        const quarter = row.quarter;
+                        const quarter = row.quarter_formatted;
                         if (!acc[quarter]) acc[quarter] = [];
                         acc[quarter].push(row);
                         return acc;
@@ -869,7 +937,8 @@
                             ticks: {
                                 font: {
                                     size: 12
-                                }
+                                },
+                                maxRotation: 45
                             }
                         }
                     },
@@ -908,21 +977,30 @@
                 'answer_Uncertainty', 'answer_Litigious', 'answer_Constraining'
             ];
 
-            // Group data by quarter
+            // Group data by quarter and sort
             const quarterData = data.reduce((acc, row) => {
-                const quarter = row.quarter;
+                const quarter = row.quarter_formatted;
                 if (!acc[quarter]) acc[quarter] = [];
                 acc[quarter].push(row);
                 return acc;
             }, {});
 
-            const quarters = Object.keys(quarterData).sort();
+            // Sort quarters by their sort keys
+            const quarterEntries = Object.entries(quarterData);
+            quarterEntries.sort((a, b) => {
+                const aSortKey = data.find(row => row.quarter_formatted === a[0])?.quarter_sort_key || a[0];
+                const bSortKey = data.find(row => row.quarter_formatted === b[0])?.quarter_sort_key || b[0];
+                return aSortKey.localeCompare(bSortKey);
+            });
+
+            const quarters = quarterEntries.map(entry => entry[0]);
+            const sortedQuarterData = Object.fromEntries(quarterEntries);
 
             // Create Question Chart
             const questionCtx = document.getElementById('questionChart').getContext('2d');
             const questionDatasets = questionMetrics.map((metric, index) => {
                 const sumValues = quarters.map(quarter => {
-                    const values = quarterData[quarter].map(row => row[metric]).filter(val => val !== null && val !== undefined);
+                    const values = sortedQuarterData[quarter].map(row => row[metric]).filter(val => val !== null && val !== undefined);
                     return values.reduce((sum, val) => sum + val, 0);
                 });
 
@@ -944,7 +1022,7 @@
             if (compareWith !== 'none') {
                 const compareData = globalData.filter(row => row.company === compareWith);
                 const compareQuarterData = compareData.reduce((acc, row) => {
-                    const quarter = row.quarter;
+                    const quarter = row.quarter_formatted;
                     if (!acc[quarter]) acc[quarter] = [];
                     acc[quarter].push(row);
                     return acc;
@@ -982,7 +1060,7 @@
                         const industrySumValues = quarters.map(quarter => {
                             // Get ALL companies in the industry for this quarter
                             const allIndustryCompaniesThisQuarter = globalData.filter(row => 
-                                row.primary_industry === companyIndustry && row.quarter === quarter
+                                row.primary_industry === companyIndustry && row.quarter_formatted === quarter
                             );
                             const values = allIndustryCompaniesThisQuarter.map(row => row[metric]).filter(val => val !== null && val !== undefined);
                             return values.reduce((sum, val) => sum + val, 0);
@@ -1046,7 +1124,8 @@
                             ticks: {
                                 font: {
                                     size: 10
-                                }
+                                },
+                                maxRotation: 45
                             }
                         }
                     },
@@ -1061,7 +1140,7 @@
             const answerCtx = document.getElementById('answerChart').getContext('2d');
             const answerDatasets = answerMetrics.map((metric, index) => {
                 const sumValues = quarters.map(quarter => {
-                    const values = quarterData[quarter].map(row => row[metric]).filter(val => val !== null && val !== undefined);
+                    const values = sortedQuarterData[quarter].map(row => row[metric]).filter(val => val !== null && val !== undefined);
                     return values.reduce((sum, val) => sum + val, 0);
                 });
 
@@ -1083,7 +1162,7 @@
             if (compareWith !== 'none') {
                 const compareData = globalData.filter(row => row.company === compareWith);
                 const compareQuarterData = compareData.reduce((acc, row) => {
-                    const quarter = row.quarter;
+                    const quarter = row.quarter_formatted;
                     if (!acc[quarter]) acc[quarter] = [];
                     acc[quarter].push(row);
                     return acc;
@@ -1121,7 +1200,7 @@
                         const industrySumValues = quarters.map(quarter => {
                             // Get ALL companies in the industry for this quarter
                             const allIndustryCompaniesThisQuarter = globalData.filter(row => 
-                                row.primary_industry === companyIndustry && row.quarter === quarter
+                                row.primary_industry === companyIndustry && row.quarter_formatted === quarter
                             );
                             const values = allIndustryCompaniesThisQuarter.map(row => row[metric]).filter(val => val !== null && val !== undefined);
                             return values.reduce((sum, val) => sum + val, 0);
@@ -1185,7 +1264,8 @@
                             ticks: {
                                 font: {
                                     size: 10
-                                }
+                                },
+                                maxRotation: 45
                             }
                         }
                     },
