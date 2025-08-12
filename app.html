@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Earnings Call Analytics Dashboard</title>
+    <title>Enhanced Earnings Call Analytics Dashboard</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
     <style>
@@ -79,6 +79,7 @@
             font-size: 14px;
             background: white;
             transition: border-color 0.3s ease;
+            min-width: 150px;
         }
 
         select:focus, input[type="file"]:focus {
@@ -100,7 +101,7 @@
             background: rgba(102, 126, 234, 0.2);
         }
 
-        .overall-btn {
+        .action-btn {
             background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             border: none;
@@ -111,15 +112,26 @@
             cursor: pointer;
             transition: all 0.3s ease;
             box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            margin: 0 5px;
         }
 
-        .overall-btn:hover {
+        .action-btn:hover {
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
         }
 
-        .overall-btn:active {
-            transform: translateY(0);
+        .action-btn.compare {
+            background: linear-gradient(135deg, #27AE60, #2ECC71);
+            box-shadow: 0 4px 15px rgba(39, 174, 96, 0.3);
+        }
+
+        .action-btn.industry {
+            background: linear-gradient(135deg, #F39C12, #E67E22);
+            box-shadow: 0 4px 15px rgba(243, 156, 18, 0.3);
+        }
+
+        .action-btn.active {
+            background: linear-gradient(135deg, #E74C3C, #C0392B);
         }
 
         .chart-container {
@@ -218,15 +230,15 @@
             color: #666;
         }
 
-        .no-data {
+        .comparison-info {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
             text-align: center;
-            padding: 40px;
-            color: #666;
-            font-style: italic;
-        }
-
-        .overall-view {
-            height: 600px;
+            font-weight: 600;
+            color: #555;
         }
 
         @media (max-width: 768px) {
@@ -237,19 +249,23 @@
             .header h1 {
                 font-size: 2rem;
             }
+            
+            .overall-charts {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
 </head>
 <body>
     <div class="dashboard">
         <div class="header">
-            <h1>📊 Earnings Call Analytics Dashboard</h1>
-            <p>Advanced sentiment analysis and time series visualization for quarterly earnings data</p>
+            <h1>📊 Enhanced Earnings Call Analytics Dashboard</h1>
+            <p>Advanced sentiment analysis with sum calculations, primary industry support, and comparison features</p>
         </div>
 
         <div class="upload-area">
-            <p>📁 Upload your Excel file to get started</p>
-            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="margin-top: 10px;">
+            <p>📁 Upload your CSV file (must include: company, quarter, primary_industry, and metric columns)</p>
+            <input type="file" id="fileInput" accept=".csv" style="margin-top: 10px;">
         </div>
 
         <div class="controls" id="controls" style="display: none;">
@@ -257,6 +273,12 @@
                 <label for="companySelect">Company:</label>
                 <select id="companySelect">
                     <option value="all">All Companies</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="industrySelect">Primary Industry:</label>
+                <select id="industrySelect">
+                    <option value="all">All Industries</option>
                 </select>
             </div>
             <div class="control-group">
@@ -297,15 +319,24 @@
                 </select>
             </div>
             <div class="control-group">
-                <button id="overallBtn" class="overall-btn">📊 Overall View</button>
+                <label for="compareSelect">Compare With:</label>
+                <select id="compareSelect">
+                    <option value="none">No Comparison</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <button id="overallBtn" class="action-btn">📊 Overall View</button>
+                <button id="industryCompareBtn" class="action-btn industry">🏭 Industry Compare</button>
             </div>
         </div>
+
+        <div id="comparisonInfo" class="comparison-info" style="display: none;"></div>
 
         <div id="summaryCards" class="summary-cards" style="display: none;"></div>
 
         <div id="chartsContainer" style="display: none;">
             <div class="chart-container" id="singleChartContainer">
-                <h3 class="chart-title" id="chartTitle">📈 Time Series Analysis</h3>
+                <h3 class="chart-title" id="chartTitle">📈 Time Series Analysis (Sum Values)</h3>
                 <div class="chart-wrapper" id="chartWrapper">
                     <canvas id="timeSeriesChart"></canvas>
                 </div>
@@ -313,13 +344,13 @@
             
             <div id="overallChartsContainer" class="overall-charts" style="display: none;">
                 <div class="overall-chart">
-                    <h3 class="overall-chart-title">📊 Question Metrics</h3>
+                    <h3 class="overall-chart-title">📊 Question Metrics (Sum)</h3>
                     <div class="overall-chart-wrapper">
                         <canvas id="questionChart"></canvas>
                     </div>
                 </div>
                 <div class="overall-chart">
-                    <h3 class="overall-chart-title">💬 Answer Metrics</h3>
+                    <h3 class="overall-chart-title">💬 Answer Metrics (Sum)</h3>
                     <div class="overall-chart-wrapper">
                         <canvas id="answerChart"></canvas>
                     </div>
@@ -328,7 +359,7 @@
         </div>
 
         <div id="loading" class="loading">
-            <p>Upload your Excel file to begin analysis...</p>
+            <p>Upload your CSV file to begin analysis...</p>
         </div>
     </div>
 
@@ -338,6 +369,7 @@
         let questionChart = null;
         let answerChart = null;
         let isOverallView = false;
+        let isIndustryCompare = false;
 
         // File upload handler
         document.getElementById('fileInput').addEventListener('change', handleFile);
@@ -346,14 +378,12 @@
             const file = event.target.files[0];
             if (!file) return;
 
-            const fileName = file.name.toLowerCase();
-            
-            if (fileName.endsWith('.csv')) {
-                parseCSV(file);
-            } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
-                alert('For Excel files, please convert to CSV format first, or use the browser\'s built-in CSV export feature.');
+            if (!file.name.toLowerCase().endsWith('.csv')) {
+                alert('Please upload a CSV file only.');
                 return;
             }
+            
+            parseCSV(file);
         }
 
         function parseCSV(file) {
@@ -369,7 +399,7 @@
                     }
                     
                     globalData = results.data;
-                    initializeDashboard();
+                    validateAndInitialize();
                 },
                 error: function(error) {
                     console.error('Error parsing CSV:', error);
@@ -378,36 +408,96 @@
             });
         }
 
-        function initializeDashboard() {
+        function validateAndInitialize() {
             if (globalData.length === 0) {
                 document.getElementById('loading').innerHTML = '<p>❌ No data found in file.</p>';
                 return;
             }
 
+            // Check for required columns
+            const requiredColumns = ['company', 'quarter'];
+            const availableColumns = Object.keys(globalData[0] || {});
+            const missingColumns = requiredColumns.filter(col => !availableColumns.includes(col));
+            
+            if (missingColumns.length > 0) {
+                document.getElementById('loading').innerHTML = 
+                    `<p>❌ Missing required columns: ${missingColumns.join(', ')}<br>
+                    Available columns: ${availableColumns.join(', ')}</p>`;
+                return;
+            }
+
+            // Check if primary_industry exists, if not create a default one
+            if (!availableColumns.includes('primary_industry')) {
+                console.log('primary_industry column not found, adding default values');
+                globalData.forEach(row => {
+                    row.primary_industry = 'General';
+                });
+            } else {
+                console.log('primary_industry column found');
+                // Clean up any null/undefined values in existing primary_industry column
+                globalData.forEach(row => {
+                    if (!row.primary_industry || row.primary_industry.toString().trim() === '') {
+                        row.primary_industry = 'General';
+                    }
+                });
+            }
+            
+            console.log('Sample data after processing:', globalData.slice(0, 3)); // Debug log
+
+            initializeDashboard();
+        }
+
+        function initializeDashboard() {
             // Show controls and charts
             document.getElementById('controls').style.display = 'flex';
             document.getElementById('summaryCards').style.display = 'grid';
             document.getElementById('chartsContainer').style.display = 'block';
             document.getElementById('loading').style.display = 'none';
 
-            // Populate company dropdown
-            populateCompanyDropdown();
+            // Populate dropdowns
+            populateIndustryDropdown(); // Populate industry first
+            populateCompanyDropdown();  // Then populate company based on industry
+            populateCompareDropdown();
             
             // Set up event listeners
-            document.getElementById('companySelect').addEventListener('change', updateDashboard);
+            document.getElementById('companySelect').addEventListener('change', () => {
+                populateCompareDropdown();
+                updateDashboard();
+            });
+            document.getElementById('industrySelect').addEventListener('change', () => {
+                populateCompanyDropdown(); // Update company dropdown when industry changes
+                populateCompareDropdown();
+                updateDashboard();
+            });
             document.getElementById('metricSelect').addEventListener('change', updateDashboard);
             document.getElementById('quarterRange').addEventListener('change', updateDashboard);
+            document.getElementById('compareSelect').addEventListener('change', updateDashboard);
             document.getElementById('overallBtn').addEventListener('click', toggleOverallView);
+            document.getElementById('industryCompareBtn').addEventListener('click', toggleIndustryCompare);
 
             // Initial dashboard update
             updateDashboard();
         }
 
         function populateCompanyDropdown() {
-            const companies = [...new Set(globalData.map(row => row.company))].filter(Boolean).sort();
-            const select = document.getElementById('companySelect');
+            const selectedIndustry = document.getElementById('industrySelect').value;
+            let companies;
             
-            // Clear existing options except "All Companies"
+            if (selectedIndustry === 'all') {
+                // Show all companies if "All Industries" is selected
+                companies = [...new Set(globalData.map(row => row.company))].filter(Boolean).sort();
+            } else {
+                // Show only companies from the selected industry
+                companies = [...new Set(globalData
+                    .filter(row => row.primary_industry === selectedIndustry)
+                    .map(row => row.company))]
+                    .filter(Boolean)
+                    .sort();
+            }
+            
+            const select = document.getElementById('companySelect');
+            const currentSelection = select.value;
+            
             select.innerHTML = '<option value="all">All Companies</option>';
             
             companies.forEach(company => {
@@ -416,16 +506,69 @@
                 option.textContent = company;
                 select.appendChild(option);
             });
+            
+            // Try to maintain the current selection if it's still valid
+            if (currentSelection !== 'all' && companies.includes(currentSelection)) {
+                select.value = currentSelection;
+            } else {
+                select.value = 'all';
+            }
+        }
+
+        function populateIndustryDropdown() {
+            // Get unique industry values, handling both null/undefined and actual values
+            const industries = [...new Set(globalData.map(row => {
+                // Handle cases where primary_industry might be null, undefined, or empty string
+                const industry = row.primary_industry;
+                return (industry && industry.toString().trim()) ? industry.toString().trim() : 'General';
+            }))].filter(Boolean).sort();
+            
+            console.log('Available industries:', industries); // Debug log
+            
+            const select = document.getElementById('industrySelect');
+            
+            select.innerHTML = '<option value="all">All Industries</option>';
+            
+            industries.forEach(industry => {
+                const option = document.createElement('option');
+                option.value = industry;
+                option.textContent = industry;
+                select.appendChild(option);
+            });
+        }
+
+        function populateCompareDropdown() {
+            const selectedCompany = document.getElementById('companySelect').value;
+            const selectedIndustry = document.getElementById('industrySelect').value;
+            let companies;
+            
+            if (selectedIndustry === 'all') {
+                // Show all companies if "All Industries" is selected
+                companies = [...new Set(globalData.map(row => row.company))].filter(Boolean).sort();
+            } else {
+                // Show only companies from the selected industry
+                companies = [...new Set(globalData
+                    .filter(row => row.primary_industry === selectedIndustry)
+                    .map(row => row.company))]
+                    .filter(Boolean)
+                    .sort();
+            }
+            
+            const select = document.getElementById('compareSelect');
+            
+            select.innerHTML = '<option value="none">No Comparison</option>';
+            
+            companies.forEach(company => {
+                if (company !== selectedCompany) {
+                    const option = document.createElement('option');
+                    option.value = company;
+                    option.textContent = `vs ${company}`;
+                    select.appendChild(option);
+                }
+            });
         }
 
         function toggleOverallView() {
-            const selectedCompany = document.getElementById('companySelect').value;
-            
-            if (selectedCompany === 'all') {
-                alert('Please select a specific company to view the overall analysis.');
-                return;
-            }
-
             isOverallView = !isOverallView;
             const btn = document.getElementById('overallBtn');
             const singleContainer = document.getElementById('singleChartContainer');
@@ -433,12 +576,12 @@
             
             if (isOverallView) {
                 btn.textContent = '📈 Single Metric';
-                btn.style.background = 'linear-gradient(135deg, #E74C3C, #C0392B)';
+                btn.classList.add('active');
                 singleContainer.style.display = 'none';
                 overallContainer.style.display = 'grid';
             } else {
                 btn.textContent = '📊 Overall View';
-                btn.style.background = 'linear-gradient(135deg, #667eea, #764ba2)';
+                btn.classList.remove('active');
                 singleContainer.style.display = 'block';
                 overallContainer.style.display = 'none';
             }
@@ -446,10 +589,34 @@
             updateDashboard();
         }
 
+        function toggleIndustryCompare() {
+            const selectedCompany = document.getElementById('companySelect').value;
+            
+            if (selectedCompany === 'all') {
+                alert('Please select a specific company to compare with industry.');
+                return;
+            }
+
+            isIndustryCompare = !isIndustryCompare;
+            const btn = document.getElementById('industryCompareBtn');
+            
+            if (isIndustryCompare) {
+                btn.textContent = '📊 Single View';
+                btn.classList.add('active');
+            } else {
+                btn.textContent = '🏭 Industry Compare';
+                btn.classList.remove('active');
+            }
+            
+            updateDashboard();
+        }
+
         function updateDashboard() {
             const selectedCompany = document.getElementById('companySelect').value;
+            const selectedIndustry = document.getElementById('industrySelect').value;
             const selectedMetric = document.getElementById('metricSelect').value;
             const quarterRange = document.getElementById('quarterRange').value;
+            const compareWith = document.getElementById('compareSelect').value;
 
             // Filter data
             let filteredData = globalData;
@@ -457,8 +624,12 @@
             if (selectedCompany !== 'all') {
                 filteredData = filteredData.filter(row => row.company === selectedCompany);
             }
+            
+            if (selectedIndustry !== 'all') {
+                filteredData = filteredData.filter(row => row.primary_industry === selectedIndustry);
+            }
 
-            // Apply quarter filtering (only if not in overall view)
+            // Apply quarter filtering
             if (quarterRange !== 'all' && !isOverallView) {
                 const quarters = [...new Set(filteredData.map(row => row.quarter))].sort();
                 const numQuarters = parseInt(quarterRange.replace('recent', ''));
@@ -467,11 +638,31 @@
             }
 
             updateSummaryCards(filteredData);
+            updateComparisonInfo(selectedCompany, compareWith, isIndustryCompare);
             
             if (isOverallView) {
-                createOverallCharts(filteredData);
+                createOverallCharts(filteredData, compareWith);
             } else {
-                createTimeSeriesChart(filteredData, selectedMetric);
+                createTimeSeriesChart(filteredData, selectedMetric, compareWith);
+            }
+        }
+
+        function updateComparisonInfo(selectedCompany, compareWith, industryMode) {
+            const infoDiv = document.getElementById('comparisonInfo');
+            
+            if (compareWith !== 'none' || industryMode) {
+                let infoText = '';
+                if (industryMode && selectedCompany !== 'all') {
+                    const companyIndustry = globalData.find(row => row.company === selectedCompany)?.primary_industry;
+                    infoText = `🏭 Comparing ${selectedCompany} with ${companyIndustry} Industry Average`;
+                } else if (compareWith !== 'none') {
+                    infoText = `🔄 Comparing ${selectedCompany} vs ${compareWith}`;
+                }
+                
+                infoDiv.textContent = infoText;
+                infoDiv.style.display = 'block';
+            } else {
+                infoDiv.style.display = 'none';
             }
         }
 
@@ -480,21 +671,22 @@
             
             const totalQuestions = data.length;
             
-            // Calculate average positive (LM + HIV4 combined)
-            const avgPositive = data.reduce((sum, row) => {
+            // Calculate sum positive (LM + HIV4 combined)
+            const sumPositive = data.reduce((sum, row) => {
                 const lmPos = row.question_LM_Positive || 0;
                 const hivPos = row.question_HIV4_Positive || 0;
-                return sum + (lmPos + hivPos) / 2;
-            }, 0) / totalQuestions;
+                return sum + lmPos + hivPos;
+            }, 0);
 
-            // Calculate average negative (LM + HIV4 combined)
-            const avgNegative = data.reduce((sum, row) => {
+            // Calculate sum negative (LM + HIV4 combined)
+            const sumNegative = data.reduce((sum, row) => {
                 const lmNeg = row.question_LM_Negative || 0;
                 const hivNeg = row.question_HIV4_Negative || 0;
-                return sum + (lmNeg + hivNeg) / 2;
-            }, 0) / totalQuestions;
+                return sum + lmNeg + hivNeg;
+            }, 0);
             
             const companies = new Set(data.map(row => row.company)).size;
+            const industries = new Set(data.map(row => row.primary_industry)).size;
 
             container.innerHTML = `
                 <div class="summary-card">
@@ -502,21 +694,25 @@
                     <p>Total Questions</p>
                 </div>
                 <div class="summary-card">
-                    <h3 class="positive">${avgPositive.toFixed(3)}</h3>
-                    <p>Avg Positive (LM+HIV4)</p>
+                    <h3 class="positive">${sumPositive.toFixed(2)}</h3>
+                    <p>Sum Positive (LM+HIV4)</p>
                 </div>
                 <div class="summary-card">
-                    <h3 class="negative">${avgNegative.toFixed(3)}</h3>
-                    <p>Avg Negative (LM+HIV4)</p>
+                    <h3 class="negative">${sumNegative.toFixed(2)}</h3>
+                    <p>Sum Negative (LM+HIV4)</p>
                 </div>
                 <div class="summary-card">
                     <h3>${companies}</h3>
                     <p>Companies</p>
                 </div>
+                <div class="summary-card">
+                    <h3>${industries}</h3>
+                    <p>Industries</p>
+                </div>
             `;
         }
 
-        function createTimeSeriesChart(data, metric) {
+        function createTimeSeriesChart(data, metric, compareWith) {
             // Destroy existing chart
             if (currentChart) {
                 currentChart.destroy();
@@ -530,7 +726,7 @@
 
             const ctx = document.getElementById('timeSeriesChart').getContext('2d');
             
-            // Group data by quarter
+            // Group data by quarter and calculate sums
             const quarterData = data.reduce((acc, row) => {
                 const quarter = row.quarter;
                 if (!acc[quarter]) acc[quarter] = [];
@@ -539,32 +735,105 @@
             }, {});
 
             const quarters = Object.keys(quarterData).sort();
-            const avgValues = quarters.map(quarter => {
+            const sumValues = quarters.map(quarter => {
                 const values = quarterData[quarter].map(row => row[metric]).filter(val => val !== null && val !== undefined);
-                return values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0;
+                return values.reduce((sum, val) => sum + val, 0);
             });
 
+            const datasets = [{
+                label: `${metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} (Sum)`,
+                data: sumValues,
+                borderColor: 'rgba(102, 126, 234, 1)',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: 'rgba(102, 126, 234, 1)',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 3,
+                pointRadius: 8,
+                pointHoverRadius: 12
+            }];
+
+            // Add comparison data
+            if (compareWith !== 'none') {
+                const compareData = globalData.filter(row => row.company === compareWith);
+                const compareQuarterData = compareData.reduce((acc, row) => {
+                    const quarter = row.quarter;
+                    if (!acc[quarter]) acc[quarter] = [];
+                    acc[quarter].push(row);
+                    return acc;
+                }, {});
+
+                const compareSumValues = quarters.map(quarter => {
+                    const values = (compareQuarterData[quarter] || []).map(row => row[metric]).filter(val => val !== null && val !== undefined);
+                    return values.reduce((sum, val) => sum + val, 0);
+                });
+
+                datasets.push({
+                    label: `${compareWith} - ${metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} (Sum)`,
+                    data: compareSumValues,
+                    borderColor: 'rgba(231, 76, 60, 1)',
+                    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.4,
+                    pointBackgroundColor: 'rgba(231, 76, 60, 1)',
+                    pointBorderColor: '#fff',
+                    pointBorderWidth: 3,
+                    pointRadius: 6,
+                    pointHoverRadius: 10
+                });
+            }
+
+            // Add industry comparison
+            if (isIndustryCompare && data.length > 0) {
+                const selectedCompany = document.getElementById('companySelect').value;
+                const companyIndustry = globalData.find(row => row.company === selectedCompany)?.primary_industry;
+                
+                if (companyIndustry) {
+                    // Get ALL companies in the same industry (including the selected company for industry total)
+                    const industryData = globalData.filter(row => row.primary_industry === companyIndustry);
+                    
+                    const industryQuarterData = industryData.reduce((acc, row) => {
+                        const quarter = row.quarter;
+                        if (!acc[quarter]) acc[quarter] = [];
+                        acc[quarter].push(row);
+                        return acc;
+                    }, {});
+
+                    const industrySumValues = quarters.map(quarter => {
+                        const values = (industryQuarterData[quarter] || []).map(row => row[metric]).filter(val => val !== null && val !== undefined);
+                        return values.reduce((sum, val) => sum + val, 0);
+                    });
+
+                    datasets.push({
+                        label: `${companyIndustry} Industry Total (Sum)`,
+                        data: industrySumValues,
+                        borderColor: 'rgba(243, 156, 18, 1)',
+                        backgroundColor: 'rgba(243, 156, 18, 0.1)',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.4,
+                        pointBackgroundColor: 'rgba(243, 156, 18, 1)',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 3,
+                        pointRadius: 6,
+                        pointHoverRadius: 10,
+                        borderDash: [5, 5]
+                    });
+                }
+            }
+
             // Update chart title
-            document.getElementById('chartTitle').textContent = `📈 Time Series Analysis - ${metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`;
+            let titleText = `📈 Time Series Analysis - ${metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} (Sum Values)`;
+            document.getElementById('chartTitle').textContent = titleText;
 
             currentChart = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: quarters,
-                    datasets: [{
-                        label: metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                        data: avgValues,
-                        borderColor: 'rgba(102, 126, 234, 1)',
-                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                        borderWidth: 3,
-                        fill: true,
-                        tension: 0.4,
-                        pointBackgroundColor: 'rgba(102, 126, 234, 1)',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 3,
-                        pointRadius: 8,
-                        pointHoverRadius: 12
-                    }]
+                    datasets: datasets
                 },
                 options: {
                     responsive: true,
@@ -583,7 +852,7 @@
                     },
                     scales: {
                         y: {
-                            beginAtZero: false,
+                            beginAtZero: true,
                             grid: {
                                 color: 'rgba(0, 0, 0, 0.1)'
                             },
@@ -612,7 +881,7 @@
             });
         }
 
-        function createOverallCharts(data) {
+        function createOverallCharts(data, compareWith) {
             // Destroy existing charts
             if (questionChart) {
                 questionChart.destroy();
@@ -652,15 +921,15 @@
             // Create Question Chart
             const questionCtx = document.getElementById('questionChart').getContext('2d');
             const questionDatasets = questionMetrics.map((metric, index) => {
-                const avgValues = quarters.map(quarter => {
+                const sumValues = quarters.map(quarter => {
                     const values = quarterData[quarter].map(row => row[metric]).filter(val => val !== null && val !== undefined);
-                    return values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0;
+                    return values.reduce((sum, val) => sum + val, 0);
                 });
 
                 const hue = (index * 360 / questionMetrics.length) % 360;
                 return {
                     label: metric.replace(/question_/g, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                    data: avgValues,
+                    data: sumValues,
                     borderColor: `hsl(${hue}, 70%, 50%)`,
                     backgroundColor: `hsla(${hue}, 70%, 50%, 0.1)`,
                     borderWidth: 2,
@@ -670,6 +939,71 @@
                     pointHoverRadius: 6
                 };
             });
+
+            // Add comparison datasets for questions if needed
+            if (compareWith !== 'none') {
+                const compareData = globalData.filter(row => row.company === compareWith);
+                const compareQuarterData = compareData.reduce((acc, row) => {
+                    const quarter = row.quarter;
+                    if (!acc[quarter]) acc[quarter] = [];
+                    acc[quarter].push(row);
+                    return acc;
+                }, {});
+
+                questionMetrics.forEach((metric, index) => {
+                    const compareSumValues = quarters.map(quarter => {
+                        const values = (compareQuarterData[quarter] || []).map(row => row[metric]).filter(val => val !== null && val !== undefined);
+                        return values.reduce((sum, val) => sum + val, 0);
+                    });
+
+                    const hue = (index * 360 / questionMetrics.length) % 360;
+                    questionDatasets.push({
+                        label: `${compareWith} - ${metric.replace(/question_/g, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+                        data: compareSumValues,
+                        borderColor: `hsl(${hue}, 70%, 30%)`,
+                        backgroundColor: `hsla(${hue}, 70%, 30%, 0.1)`,
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        borderDash: [3, 3]
+                    });
+                });
+            }
+
+            // Add industry comparison for questions
+            if (isIndustryCompare && data.length > 0) {
+                const selectedCompany = document.getElementById('companySelect').value;
+                const companyIndustry = globalData.find(row => row.company === selectedCompany)?.primary_industry;
+                
+                if (companyIndustry) {
+                    questionMetrics.forEach((metric, index) => {
+                        const industrySumValues = quarters.map(quarter => {
+                            // Get ALL companies in the industry for this quarter
+                            const allIndustryCompaniesThisQuarter = globalData.filter(row => 
+                                row.primary_industry === companyIndustry && row.quarter === quarter
+                            );
+                            const values = allIndustryCompaniesThisQuarter.map(row => row[metric]).filter(val => val !== null && val !== undefined);
+                            return values.reduce((sum, val) => sum + val, 0);
+                        });
+
+                        const hue = (index * 360 / questionMetrics.length) % 360;
+                        questionDatasets.push({
+                            label: `${companyIndustry} Industry - ${metric.replace(/question_/g, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+                            data: industrySumValues,
+                            borderColor: `hsl(${hue}, 50%, 40%)`,
+                            backgroundColor: `hsla(${hue}, 50%, 40%, 0.1)`,
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            borderDash: [5, 5]
+                        });
+                    });
+                }
+            }
 
             questionChart = new Chart(questionCtx, {
                 type: 'line',
@@ -686,7 +1020,7 @@
                             position: 'bottom',
                             labels: {
                                 font: {
-                                    size: 9
+                                    size: 8
                                 },
                                 boxWidth: 8,
                                 usePointStyle: true
@@ -695,7 +1029,7 @@
                     },
                     scales: {
                         y: {
-                            beginAtZero: false,
+                            beginAtZero: true,
                             grid: {
                                 color: 'rgba(0, 0, 0, 0.1)'
                             },
@@ -726,15 +1060,15 @@
             // Create Answer Chart
             const answerCtx = document.getElementById('answerChart').getContext('2d');
             const answerDatasets = answerMetrics.map((metric, index) => {
-                const avgValues = quarters.map(quarter => {
+                const sumValues = quarters.map(quarter => {
                     const values = quarterData[quarter].map(row => row[metric]).filter(val => val !== null && val !== undefined);
-                    return values.length > 0 ? values.reduce((sum, val) => sum + val, 0) / values.length : 0;
+                    return values.reduce((sum, val) => sum + val, 0);
                 });
 
                 const hue = (index * 360 / answerMetrics.length) % 360;
                 return {
                     label: metric.replace(/answer_/g, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                    data: avgValues,
+                    data: sumValues,
                     borderColor: `hsl(${hue}, 70%, 50%)`,
                     backgroundColor: `hsla(${hue}, 70%, 50%, 0.1)`,
                     borderWidth: 2,
@@ -744,6 +1078,71 @@
                     pointHoverRadius: 6
                 };
             });
+
+            // Add comparison datasets for answers if needed
+            if (compareWith !== 'none') {
+                const compareData = globalData.filter(row => row.company === compareWith);
+                const compareQuarterData = compareData.reduce((acc, row) => {
+                    const quarter = row.quarter;
+                    if (!acc[quarter]) acc[quarter] = [];
+                    acc[quarter].push(row);
+                    return acc;
+                }, {});
+
+                answerMetrics.forEach((metric, index) => {
+                    const compareSumValues = quarters.map(quarter => {
+                        const values = (compareQuarterData[quarter] || []).map(row => row[metric]).filter(val => val !== null && val !== undefined);
+                        return values.reduce((sum, val) => sum + val, 0);
+                    });
+
+                    const hue = (index * 360 / answerMetrics.length) % 360;
+                    answerDatasets.push({
+                        label: `${compareWith} - ${metric.replace(/answer_/g, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+                        data: compareSumValues,
+                        borderColor: `hsl(${hue}, 70%, 30%)`,
+                        backgroundColor: `hsla(${hue}, 70%, 30%, 0.1)`,
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.3,
+                        pointRadius: 2,
+                        pointHoverRadius: 5,
+                        borderDash: [3, 3]
+                    });
+                });
+            }
+
+            // Add industry comparison for answers
+            if (isIndustryCompare && data.length > 0) {
+                const selectedCompany = document.getElementById('companySelect').value;
+                const companyIndustry = globalData.find(row => row.company === selectedCompany)?.primary_industry;
+                
+                if (companyIndustry) {
+                    answerMetrics.forEach((metric, index) => {
+                        const industrySumValues = quarters.map(quarter => {
+                            // Get ALL companies in the industry for this quarter
+                            const allIndustryCompaniesThisQuarter = globalData.filter(row => 
+                                row.primary_industry === companyIndustry && row.quarter === quarter
+                            );
+                            const values = allIndustryCompaniesThisQuarter.map(row => row[metric]).filter(val => val !== null && val !== undefined);
+                            return values.reduce((sum, val) => sum + val, 0);
+                        });
+
+                        const hue = (index * 360 / answerMetrics.length) % 360;
+                        answerDatasets.push({
+                            label: `${companyIndustry} Industry - ${metric.replace(/answer_/g, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+                            data: industrySumValues,
+                            borderColor: `hsl(${hue}, 50%, 40%)`,
+                            backgroundColor: `hsla(${hue}, 50%, 40%, 0.1)`,
+                            borderWidth: 2,
+                            fill: false,
+                            tension: 0.3,
+                            pointRadius: 2,
+                            pointHoverRadius: 5,
+                            borderDash: [5, 5]
+                        });
+                    });
+                }
+            }
 
             answerChart = new Chart(answerCtx, {
                 type: 'line',
@@ -760,7 +1159,7 @@
                             position: 'bottom',
                             labels: {
                                 font: {
-                                    size: 9
+                                    size: 8
                                 },
                                 boxWidth: 8,
                                 usePointStyle: true
@@ -769,7 +1168,7 @@
                     },
                     scales: {
                         y: {
-                            beginAtZero: false,
+                            beginAtZero: true,
                             grid: {
                                 color: 'rgba(0, 0, 0, 0.1)'
                             },
