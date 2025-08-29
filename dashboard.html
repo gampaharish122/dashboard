@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Investment Portfolio Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .control-row {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 600;
+            color: #4a5568;
+            font-size: 0.9rem;
+        }
+
+        select, button, input {
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            background: white;
+        }
+
+        select:focus, input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            overflow: hidden;
+            display: inline-block;
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            border-radius: 8px;
+        }
+
+        .file-input-wrapper input[type=file] {
+            position: absolute;
+            left: -9999px;
+        }
+
+        .file-input-wrapper label {
+            color: white;
+            font-weight: 600;
+            padding: 12px 16px;
+            display: block;
+            cursor: pointer;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .card h3 {
+            color: #2d3748;
+            margin-bottom: 20px;
+            font-size: 1.3rem;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+
+        th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px 8px;
+            text-align: left;
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        td {
+            padding: 10px 8px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        tbody tr:hover {
+            background-color: #f7fafc;
+        }
+
+        .positive {
+            color: #48bb78;
+            font-weight: 600;
+        }
+
+        .negative {
+            color: #f56565;
+            font-weight: 600;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 350px;
+            width: 100%;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        @media (max-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .control-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📈 Investment Portfolio Dashboard</h1>
+            <p>Analyze your investment performance with interactive charts and insights</p>
+        </div>
+
+        <div class="controls">
+            <div class="control-row">
+                <div class="file-input-wrapper">
+                    <input type="file" id="csvFile" accept=".csv,.xlsx,.xls">
+                    <label for="csvFile">📁 Upload Excel/CSV File</label>
+                </div>
+                <button id="loadSampleData">📊 Load Sample Data</button>
+            </div>
+
+            <div class="control-row">
+                <div class="control-group">
+                    <label for="viewType">View Type:</label>
+                    <select id="viewType">
+                        <option value="company">Company Analysis</option>
+                        <option value="overall">Overall Analysis</option>
+                    </select>
+                </div>
+
+                <div class="control-group" id="overallOptions" style="display:none;">
+                    <label for="overallType">Analysis Type:</label>
+                    <select id="overallType">
+                        <option value="sector">Sector Wise</option>
+                        <option value="all">All Sectors</option>
+                    </select>
+                </div>
+
+                <div class="control-group" id="sectorGroup" style="display:none;">
+                    <label for="sectorSelect">Select Sector:</label>
+                    <select id="sectorSelect">
+                        <option value="">Choose Sector...</option>
+                    </select>
+                </div>
+
+                <div class="control-group" id="companyGroup">
+                    <label for="companySelect">Select Company:</label>
+                    <select id="companySelect">
+                        <option value="">Choose Company...</option>
+                    </select>
+                </div>
+
+                <button id="analyzeBtn">🔍 Analyze</button>
+            </div>
+        </div>
+
+        <div class="dashboard" id="results" style="display:none;">
+            <div class="card full-width" id="summaryCard">
+                <h3>📊 Summary Statistics</h3>
+                <div class="stats-grid" id="statsGrid">
+                    <!-- Stats will be populated here -->
+                </div>
+            </div>
+
+            <div class="card" id="investmentDetails">
+                <h3>💼 Investment Details</h3>
+                <div class="table-container">
+                    <table id="investmentTable">
+                        <thead>
+                            <tr>
+                                <th>Purchase Date</th>
+                                <th>Company</th>
+                                <th>Sector</th>
+                                <th>Instrument</th>
+                                <th>Status</th>
+                                <th>Buy Price</th>
+                                <th>Close Price</th>
+                                <th>Growth %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="investmentTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card" id="performanceChart">
+                <h3>📈 Performance Over Time</h3>
+                <div class="chart-container">
+                    <canvas id="timeSeriesChart"></canvas>
+                </div>
+            </div>
+
+            <div class="card full-width" id="comparisonChart">
+                <h3>⚖️ Leaders vs Laggards Comparison</h3>
+                <div class="chart-container">
+                    <canvas id="comparisonBarChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let portfolioData = [];
+        let currentChart = null;
+        let comparisonChart = null;
+
+        // Sample data generator
+        function generateSampleData() {
+            const companies = ['Apple Inc.', 'Microsoft Corp.', 'Amazon.com Inc.', 'Google (Alphabet)', 'Tesla Inc.', 'Meta Platforms', 'Netflix Inc.', 'Adobe Inc.'];
+            const sectors = ['Technology', 'Consumer Discretionary', 'Communication Services', 'Automotive'];
+            const instruments = ['Stock', 'ETF', 'Bond'];
+            const statuses = ['Leader', 'Laggard'];
+            
+            const data = [];
+            const dates = ['2024-01-15', '2024-02-20', '2024-03-10', '2024-04-05', '2024-05-18'];
+            
+            for (let i = 0; i < 40; i++) {
+                const buyPrice = Math.random() * 200 + 50;
+                const priceClose = buyPrice * (0.7 + Math.random() * 0.8);
+                
+                data.push({
+                    'Purchase Date': dates[Math.floor(Math.random() * dates.length)],
+                    'SELL Date': '2024-12-31',
+                    'Company': companies[Math.floor(Math.random() * companies.length)],
+                    'Instrument': instruments[Math.floor(Math.random() * instruments.length)],
+                    'Sector': sectors[Math.floor(Math.random() * sectors.length)],
+                    'MKT CAP (US$ M)': Math.floor(Math.random() * 50000 + 1000),
+                    'Status': statuses[Math.floor(Math.random() * statuses.length)],
+                    'Buy': buyPrice.toFixed(2),
+                    'Price Close': priceClose.toFixed(2)
+                });
+            }
+            return data;
+        }
+
+        // Format date to YYYY-MM-DD
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            
+            try {
+                // Handle various date formats
+                let date;
+                if (typeof dateString === 'number') {
+                    // Excel date serial number
+                    date = new Date((dateString - 25569) * 86400 * 1000);
+                } else {
+                    date = new Date(dateString);
+                }
+                
+                if (isNaN(date.getTime())) {
+                    return dateString; // Return original if can't parse
+                }
+                
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                
+                return `${year}-${month}-${day}`;
+            } catch (error) {
+                return dateString;
+            }
+        }
+
+        // File upload handler
+        document.getElementById('csvFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const fileName = file.name.toLowerCase();
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    let data;
+                    
+                    if (fileName.endsWith('.csv')) {
+                        // Handle CSV files
+                        const csv = e.target.result;
+                        const results = Papa.parse(csv, {
+                            header: true,
+                            dynamicTyping: true,
+                            skipEmptyLines: true,
+                            transformHeader: function(header) {
+                                return header.trim(); // Remove whitespace from headers
+                            }
+                        });
+                        data = results.data;
+                    } else if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+                        // Handle Excel files
+                        const arrayBuffer = e.target.result;
+                        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+                        const firstSheetName = workbook.SheetNames[0];
+                        const worksheet = workbook.Sheets[firstSheetName];
+                        data = XLSX.utils.sheet_to_json(worksheet, { 
+                            header: 1,
+                            defval: ''
+                        });
+                        
+                        // Convert array format to object format
+                        if (data.length > 0) {
+                            const headers = data[0].map(h => h.toString().trim());
+                            data = data.slice(1).map(row => {
+                                const obj = {};
+                                headers.forEach((header, index) => {
+                                    obj[header] = row[index] || '';
+                                });
+                                return obj;
+                            });
+                        }
+                    }
+
+                    if (data && data.length > 0) {
+                        // Validate required columns
+                        const requiredColumns = ['Purchase Date', 'Company', 'Buy', 'Price Close', 'Status'];
+                        const dataColumns = Object.keys(data[0]);
+                        const missingColumns = requiredColumns.filter(col => 
+                            !dataColumns.some(dataCol => dataCol.toLowerCase().includes(col.toLowerCase()))
+                        );
+
+                        if (missingColumns.length > 0) {
+                            alert(`Missing required columns: ${missingColumns.join(', ')}\n\nYour file should contain: Purchase Date, SELL Date, Company, Instrument, Sector, MKT CAP (US$ M), Status, Buy, Price Close`);
+                            return;
+                        }
+
+                        portfolioData = data.filter(row => row.Company && row.Buy && row['Price Close']); // Filter out empty rows
+                        processData();
+                        alert(`Successfully loaded ${portfolioData.length} records!`);
+                    } else {
+                        alert('No data found in the file. Please check your file format.');
+                    }
+                } catch (error) {
+                    console.error('Error processing file:', error);
+                    alert('Error processing file. Please ensure it\'s a valid CSV or Excel file with the correct format.');
+                }
+            };
+
+            reader.onerror = function() {
+                alert('Error reading file. Please try again.');
+            };
+
+            // Read file based on type
+            if (fileName.endsWith('.csv')) {
+                reader.readAsText(file);
+            } else {
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        // Load sample data
+        document.getElementById('loadSampleData').addEventListener('click', function() {
+            portfolioData = generateSampleData();
+            processData();
+        });
+
+        // Process data and populate dropdowns
+        function processData() {
+            try {
+                // Clean and validate data
+                portfolioData = portfolioData.map(row => {
+                    // Handle different possible column names
+                    const purchaseDate = formatDate(row['Purchase Date'] || row['purchase date'] || row['Purchase_Date']);
+                    const sellDate = formatDate(row['SELL Date'] || row['Sell Date'] || row['sell date'] || '');
+                    const company = row['Company'] || row['company'];
+                    const buyPrice = parseFloat(row['Buy'] || row['buy'] || 0);
+                    const closePrice = parseFloat(row['Price Close'] || row['price close'] || row['Close'] || 0);
+                    const marketCap = parseFloat(row['MKT CAP (US$ M)'] || row['Market Cap'] || row['MKT_CAP'] || 0);
+                    const status = row['Status'] || row['status'] || 'Unknown';
+                    const sector = row['Sector'] || row['sector'] || 'Unknown';
+                    const instrument = row['Instrument'] || row['instrument'] || 'Unknown';
+                    
+                    // Calculate growth percentage: (Price Close - Buy) * 100 / Buy
+                    const growthPercent = buyPrice > 0 ? ((closePrice - buyPrice) * 100 / buyPrice).toFixed(2) : '0.00';
+                    
+                    return {
+                        'Purchase Date': purchaseDate,
+                        'SELL Date': sellDate,
+                        'Company': company,
+                        'Instrument': instrument,
+                        'Sector': sector,
+                        'MKT CAP (US$ M)': marketCap,
+                        'Status': status,
+                        'Buy': buyPrice.toFixed(2),
+                        'Price Close': closePrice.toFixed(2),
+                        'growthPercent': parseFloat(growthPercent) // Keep as number for calculations
+                    };
+                }).filter(row => row.Company && row['Buy'] > 0 && row['Price Close'] > 0); // Filter valid rows
+
+                console.log('Processed data:', portfolioData);
+                populateDropdowns();
+                document.getElementById('results').style.display = 'grid';
+            } catch (error) {
+                console.error('Error processing data:', error);
+                alert('Error processing data. Please check your file format.');
+            }
+        }
+
+        // Populate dropdowns
+        function populateDropdowns() {
+            const sectors = [...new Set(portfolioData.map(row => row.Sector))].filter(Boolean);
+            const companies = [...new Set(portfolioData.map(row => row.Company))].filter(Boolean);
+
+            const sectorSelect = document.getElementById('sectorSelect');
+            const companySelect = document.getElementById('companySelect');
+
+            // Clear existing options
+            sectorSelect.innerHTML = '<option value="">Choose Sector...</option>';
+            companySelect.innerHTML = '<option value="">Choose Company...</option>';
+
+            // Populate sectors
+            sectors.forEach(sector => {
+                sectorSelect.innerHTML += `<option value="${sector}">${sector}</option>`;
+            });
+
+            // Populate companies
+            companies.forEach(company => {
+                companySelect.innerHTML += `<option value="${company}">${company}</option>`;
+            });
+        }
+
+        // View type change handler
+        document.getElementById('viewType').addEventListener('change', function() {
+            const viewType = this.value;
+            const overallOptions = document.getElementById('overallOptions');
+            const sectorGroup = document.getElementById('sectorGroup');
+            const companyGroup = document.getElementById('companyGroup');
+
+            if (viewType === 'overall') {
+                overallOptions.style.display = 'block';
+                companyGroup.style.display = 'none';
+                handleOverallTypeChange();
+            } else {
+                overallOptions.style.display = 'none';
+                sectorGroup.style.display = 'none';
+                companyGroup.style.display = 'block';
+            }
+        });
+
+        // Overall type change handler
+        document.getElementById('overallType').addEventListener('change', handleOverallTypeChange);
+
+        function handleOverallTypeChange() {
+            const overallType = document.getElementById('overallType').value;
+            const sectorGroup = document.getElementById('sectorGroup');
+
+            if (overallType === 'sector') {
+                sectorGroup.style.display = 'block';
+            } else {
+                sectorGroup.style.display = 'none';
+            }
+        }
+
+        // Sector change handler - update companies dropdown
+        document.getElementById('sectorSelect').addEventListener('change', function() {
+            const selectedSector = this.value;
+            const companySelect = document.getElementById('companySelect');
+            
+            if (selectedSector) {
+                const companiesInSector = [...new Set(
+                    portfolioData
+                        .filter(row => row.Sector === selectedSector)
+                        .map(row => row.Company)
+                )].filter(Boolean);
+
+                companySelect.innerHTML = '<option value="">Choose Company...</option>';
+                companiesInSector.forEach(company => {
+                    companySelect.innerHTML += `<option value="${company}">${company}</option>`;
+                });
+            }
+        });
+
+        // Analyze button handler
+        document.getElementById('analyzeBtn').addEventListener('click', function() {
+            const viewType = document.getElementById('viewType').value;
+            
+            if (viewType === 'company') {
+                analyzeCompany();
+            } else {
+                analyzeOverall();
+            }
+        });
+
+        // Company analysis
+        function analyzeCompany() {
+            const selectedCompany = document.getElementById('companySelect').value;
+            if (!selectedCompany) {
+                alert('Please select a company first!');
+                return;
+            }
+
+            const companyData = portfolioData.filter(row => row.Company === selectedCompany);
+            displayCompanyResults(companyData, selectedCompany);
+        }
+
+        // Overall analysis
+        function analyzeOverall() {
+            const overallType = document.getElementById('overallType').value;
+            const selectedSector = document.getElementById('sectorSelect').value;
+
+            let data = portfolioData;
+            let title = 'All Sectors';
+
+            if (overallType === 'sector' && selectedSector) {
+                data = portfolioData.filter(row => row.Sector === selectedSector);
+                title = `Sector: ${selectedSector}`;
+            }
+
+            displayOverallResults(data, title);
+        }
+
+        // Display company results
+        function displayCompanyResults(data, companyName) {
+            // Update table
+            updateInvestmentTable(data);
+
+            // Create time series chart
+            createTimeSeriesChart(data, companyName);
+
+            // Update summary stats
+            updateSummaryStats(data, `Company: ${companyName}`);
+
+            // Create comparison chart
+            createComparisonChart(data);
+        }
+
+        // Display overall results
+        function displayOverallResults(data, title) {
+            // Group by purchase date and calculate weighted averages
+            const groupedData = groupByPurchaseDate(data);
+            
+            // Update table with grouped data
+            updateOverallTable(groupedData);
+
+            // Create charts
+            createOverallTimeSeriesChart(groupedData, title);
+            createOverallComparisonChart(groupedData);
+
+            // Update summary stats
+            updateOverallSummaryStats(data, title);
+        }
+
+        // Group data by purchase date and calculate weighted averages
+        function groupByPurchaseDate(data) {
+            const grouped = {};
+
+            data.forEach(row => {
+                const date = row['Purchase Date'];
+                if (!grouped[date]) {
+                    grouped[date] = {
+                        leaders: [],
+                        laggards: []
+                    };
+                }
+
+                if (row.Status === 'Leader') {
+                    grouped[date].leaders.push(row);
+                } else {
+                    grouped[date].laggards.push(row);
+                }
+            });
+
+            // Calculate weighted averages
+            Object.keys(grouped).forEach(date => {
+                grouped[date].leaderWeightedGrowth = calculateWeightedAverage(grouped[date].leaders);
+                grouped[date].laggardWeightedGrowth = calculateWeightedAverage(grouped[date].laggards);
+                grouped[date].leaderCount = grouped[date].leaders.length;
+                grouped[date].laggardCount = grouped[date].laggards.length;
+            });
+
+            return grouped;
+        }
+
+        // Calculate weighted average using the specified formula
+        // Weighted Average = Σ(Market Cap_i / Total Market Cap × Data Point_i)
+        function calculateWeightedAverage(dataArray) {
+            if (dataArray.length === 0) return 0;
+
+            // Calculate total market cap
+            const totalMarketCap = dataArray.reduce((sum, row) => sum + parseFloat(row['MKT CAP (US$ M)']), 0);
+            
+            if (totalMarketCap === 0) return 0;
+
+            // Calculate weighted sum: Σ(Market Cap_i / Total Market Cap × Growth_i)
+            const weightedSum = dataArray.reduce((sum, row) => {
+                const marketCap = parseFloat(row['MKT CAP (US$ M)']);
+                const weight = marketCap / totalMarketCap;
+                const growth = parseFloat(row.growthPercent);
+                return sum + (weight * growth);
+            }, 0);
+
+            return weightedSum.toFixed(2);
+        }
+
+        // Update investment table
+        function updateInvestmentTable(data) {
+            const tbody = document.getElementById('investmentTableBody');
+            tbody.innerHTML = '';
+
+            data.forEach(row => {
+                const growthClass = parseFloat(row.growthPercent) >= 0 ? 'positive' : 'negative';
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${row['Purchase Date']}</td>
+                        <td>${row.Company}</td>
+                        <td>${row.Sector || 'N/A'}</td>
+                        <td>${row.Instrument}</td>
+                        <td><span class="${row.Status === 'Leader' ? 'positive' : 'negative'}">${row.Status}</span></td>
+                        <td>${parseFloat(row.Buy).toFixed(2)}</td>
+                        <td>${parseFloat(row['Price Close']).toFixed(2)}</td>
+                        <td><span class="${growthClass}">${parseFloat(row.growthPercent).toFixed(2)}%</span></td>
+                    </tr>
+                `;
+            });
+        }
+
+        // Update overall table
+        function updateOverallTable(groupedData) {
+            const tbody = document.getElementById('investmentTableBody');
+            tbody.innerHTML = '';
+
+            Object.keys(groupedData).sort().forEach(date => {
+                const data = groupedData[date];
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${date}</td>
+                        <td colspan="3">Leaders Weighted Avg</td>
+                        <td><span class="positive">Leader</span></td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td><span class="${parseFloat(data.leaderWeightedGrowth) >= 0 ? 'positive' : 'negative'}">${data.leaderWeightedGrowth}%</span></td>
+                    </tr>
+                    <tr>
+                        <td>${date}</td>
+                        <td colspan="3">Laggards Weighted Avg</td>
+                        <td><span class="negative">Laggard</span></td>
+                        <td>-</td>
+                        <td>-</td>
+                        <td><span class="${parseFloat(data.laggardWeightedGrowth) >= 0 ? 'positive' : 'negative'}">${data.laggardWeightedGrowth}%</span></td>
+                    </tr>
+                `;
+            });
+        }
+
+        // Create time series chart
+        function createTimeSeriesChart(data, title) {
+            const ctx = document.getElementById('timeSeriesChart').getContext('2d');
+            
+            if (currentChart) {
+                currentChart.destroy();
+            }
+
+            // Sort data by purchase date
+            const sortedData = data.sort((a, b) => new Date(a['Purchase Date']) - new Date(b['Purchase Date']));
+
+            const labels = sortedData.map(row => row['Purchase Date']);
+            const growthData = sortedData.map(row => parseFloat(row.growthPercent));
+
+            currentChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Growth %',
+                        data: growthData,
+                        borderColor: 'rgb(102, 126, 234)',
+                        backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `${title} - Growth Over Time`
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create overall time series chart
+        function createOverallTimeSeriesChart(groupedData, title) {
+            const ctx = document.getElementById('timeSeriesChart').getContext('2d');
+            
+            if (currentChart) {
+                currentChart.destroy();
+            }
+
+            const sortedDates = Object.keys(groupedData).sort();
+            const leaderData = sortedDates.map(date => parseFloat(groupedData[date].leaderWeightedGrowth));
+            const laggardData = sortedDates.map(date => parseFloat(groupedData[date].laggardWeightedGrowth));
+
+            currentChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: sortedDates,
+                    datasets: [{
+                        label: 'Leaders (Weighted Avg)',
+                        data: leaderData,
+                        borderColor: 'rgb(72, 187, 120)',
+                        backgroundColor: 'rgba(72, 187, 120, 0.1)',
+                        tension: 0.4
+                    }, {
+                        label: 'Laggards (Weighted Avg)',
+                        data: laggardData,
+                        borderColor: 'rgb(245, 101, 101)',
+                        backgroundColor: 'rgba(245, 101, 101, 0.1)',
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `${title} - Leaders vs Laggards Over Time`
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create comparison chart
+        function createComparisonChart(data) {
+            const ctx = document.getElementById('comparisonBarChart').getContext('2d');
+            
+            if (comparisonChart) {
+                comparisonChart.destroy();
+            }
+
+            const leaders = data.filter(row => row.Status === 'Leader');
+            const laggards = data.filter(row => row.Status === 'Laggard');
+
+            // Calculate weighted averages using market cap
+            const leaderWeightedAvg = parseFloat(calculateWeightedAverage(leaders));
+            const laggardWeightedAvg = parseFloat(calculateWeightedAverage(laggards));
+
+            comparisonChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Leaders', 'Laggards'],
+                    datasets: [{
+                        label: 'Weighted Average Growth %',
+                        data: [leaderWeightedAvg.toFixed(2), laggardWeightedAvg.toFixed(2)],
+                        backgroundColor: [
+                            'rgba(72, 187, 120, 0.8)',
+                            'rgba(245, 101, 101, 0.8)'
+                        ],
+                        borderColor: [
+                            'rgb(72, 187, 120)',
+                            'rgb(245, 101, 101)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Leaders vs Laggards Performance'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Create overall comparison chart
+        function createOverallComparisonChart(groupedData) {
+            const ctx = document.getElementById('comparisonBarChart').getContext('2d');
+            
+            if (comparisonChart) {
+                comparisonChart.destroy();
+            }
+
+            const sortedDates = Object.keys(groupedData).sort();
+            const leaderData = sortedDates.map(date => parseFloat(groupedData[date].leaderWeightedGrowth));
+            const laggardData = sortedDates.map(date => parseFloat(groupedData[date].laggardWeightedGrowth));
+
+            comparisonChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: sortedDates,
+                    datasets: [{
+                        label: 'Leaders (Weighted Avg)',
+                        data: leaderData,
+                        backgroundColor: 'rgba(72, 187, 120, 0.8)',
+                        borderColor: 'rgb(72, 187, 120)',
+                        borderWidth: 2
+                    }, {
+                        label: 'Laggards (Weighted Avg)',
+                        data: laggardData,
+                        backgroundColor: 'rgba(245, 101, 101, 0.8)',
+                        borderColor: 'rgb(245, 101, 101)',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'Leaders vs Laggards by Purchase Date'
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Update summary stats
+        function updateSummaryStats(data, title) {
+            const statsGrid = document.getElementById('statsGrid');
+            
+            const totalInvestments = data.length;
+            const leaders = data.filter(row => row.Status === 'Leader').length;
+            const laggards = data.filter(row => row.Status === 'Laggard').length;
+            
+            // Calculate weighted average growth for all data
+            const weightedAvgGrowth = calculateWeightedAverage(data);
+
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${totalInvestments}</div>
+                    <div class="stat-label">Total Investments</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${leaders}</div>
+                    <div class="stat-label">Leaders</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${laggards}</div>
+                    <div class="stat-label">Laggards</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${weightedAvgGrowth}%</div>
+                    <div class="stat-label">Weighted Avg Growth</div>
+                </div>
+            `;
+        }
+
+        // Update overall summary stats
+        function updateOverallSummaryStats(data, title) {
+            const statsGrid = document.getElementById('statsGrid');
+            
+            const totalInvestments = data.length;
+            const leaders = data.filter(row => row.Status === 'Leader').length;
+            const laggards = data.filter(row => row.Status === 'Laggard').length;
+            const uniqueDates = [...new Set(data.map(row => row['Purchase Date']))].length;
+            const totalMarketCap = data.reduce((sum, row) => sum + parseFloat(row['MKT CAP (US$ M)']), 0);
+            const weightedAvgGrowth = calculateWeightedAverage(data);
+
+            statsGrid.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value">${totalInvestments}</div>
+                    <div class="stat-label">Total Investments</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${leaders}</div>
+                    <div class="stat-label">Leaders</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${laggards}</div>
+                    <div class="stat-label">Laggards</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${uniqueDates}</div>
+                    <div class="stat-label">Purchase Dates</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${(totalMarketCap / 1000).toFixed(1)}B</div>
+                    <div class="stat-label">Total Market Cap</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">${weightedAvgGrowth}%</div>
+                    <div class="stat-label">Weighted Avg Growth</div>
+                </div>
+            `;
+        }
+
+        // Initialize with sample data on page load
+        window.addEventListener('load', function() {
+            // You can uncomment this line to load sample data automatically
+            // document.getElementById('loadSampleData').click();
+        });
+    </script>
+</body>
+</html>
