@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Data Analysis Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h1 {
+            color: #4a5568;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            color: #718096;
+            font-size: 1.1rem;
+        }
+
+        .upload-section {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+            width: 100%;
+        }
+
+        .file-input {
+            position: absolute;
+            opacity: 0;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+
+        .file-input-button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 15px 30px;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-height: 60px;
+        }
+
+        .file-input-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .controls-section {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .controls-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #4a5568;
+        }
+
+        .control-group select {
+            padding: 12px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            transition: all 0.3s ease;
+        }
+
+        .control-group select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .all-sectors-btn {
+            padding: 12px 24px;
+            background: linear-gradient(45deg, #38a169, #2f855a);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 8px;
+        }
+
+        .all-sectors-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(56, 161, 105, 0.3);
+        }
+
+        .charts-section {
+            display: none;
+        }
+
+        .chart-container {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 25px;
+            border-radius: 15px;
+            margin-bottom: 25px;
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .chart-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #4a5568;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .chart-wrapper {
+            position: relative;
+            height: 400px;
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #4a5568;
+        }
+
+        .charts-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+        }
+
+        @media (max-width: 1200px) {
+            .charts-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .controls-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 Ravenpackstudy </h1>
+            <p>Upload your Excel file and analyze company data with interactive charts</p>
+        </div>
+
+        <div class="upload-section">
+            <div class="file-input-wrapper">
+                <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls" />
+                <div class="file-input-button">
+                    📁 Choose Excel File
+                </div>
+            </div>
+            <div id="fileStatus"></div>
+        </div>
+
+        <div class="controls-section" id="controlsSection">
+            <div class="controls-grid">
+                <!-- First Chart Controls -->
+                <div class="control-group">
+                    <label for="sectorSelect1">Sector Analysis:</label>
+                    <select id="sectorSelect1">
+                        <option value="">Choose Sector...</option>
+                    </select>
+                    <button class="all-sectors-btn" onclick="showAllSectors()">All Sectors</button>
+                </div>
+
+                <!-- Second Chart Controls -->
+                <div class="control-group">
+                    <label for="companySelect2">Company Comparison:</label>
+                    <select id="companySelect2">
+                        <option value="">Choose Company...</option>
+                    </select>
+                </div>
+                <div class="control-group">
+                    <label for="indicatorSelect2">Select Indicator:</label>
+                    <select id="indicatorSelect2">
+                        <option value="">Choose Indicator...</option>
+                        <option value="Hiring_Volume_M12">Hiring Volume M12</option>
+                        <option value="Location_Similarity_M">Location Similarity M</option>
+                        <option value="Demanded_Volume_M12">Demanded Volume M12</option>
+                        <option value="Return">Return</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div class="charts-section" id="chartsSection">
+            <div class="chart-container">
+                <div class="chart-title" id="chart1Title">Sector Analysis - All Indicators</div>
+                <div class="chart-wrapper">
+                    <canvas id="sectorChart"></canvas>
+                </div>
+            </div>
+
+            <div class="charts-grid">
+                <div class="chart-container">
+                    <div class="chart-title" id="chart2Title">Company vs Sector vs SP500 Comparison</div>
+                    <div class="chart-wrapper">
+                        <canvas id="comparisonChart"></canvas>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <div class="chart-title" id="chart3Title">12-Month Moving Average Analysis</div>
+                    <div class="chart-wrapper">
+                        <canvas id="indicatorsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let excelData = [];
+        let sectorChart = null;
+        let comparisonChart = null;
+        let indicatorsChart = null;
+        let companyToSectorMap = {};
+
+        // File upload handler
+        document.getElementById('fileInput').addEventListener('change', handleFileUpload);
+        document.getElementById('sectorSelect1').addEventListener('change', updateSectorChart);
+        document.getElementById('companySelect2').addEventListener('change', updateCompanySelection);
+        document.getElementById('indicatorSelect2').addEventListener('change', updateComparisonChart);
+
+        function showStatus(message, type = 'success') {
+            const statusDiv = document.getElementById('fileStatus');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            showStatus('📊 Processing Excel file...', 'success');
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+                    if (jsonData.length === 0) {
+                        showStatus('❌ Excel file is empty', 'error');
+                        return;
+                    }
+
+                    // Validate required columns with trimmed names
+                    const requiredColumns = ['Sector', 'Company', 'Date', 'Hiring_Volume_M12', 'Location_Similarity_M', 'Demanded_Volume_M12', 'Return', 'SP500'];
+                    const fileColumns = Object.keys(jsonData[0]).map(col => col.trim());
+                    
+                    console.log('File columns found:', fileColumns);
+                    console.log('Required columns:', requiredColumns);
+                    
+                    const missingColumns = requiredColumns.filter(col => !fileColumns.includes(col));
+
+                    if (missingColumns.length > 0) {
+                        showStatus(`❌ Missing required columns: ${missingColumns.join(', ')}. Found columns: ${fileColumns.join(', ')}`, 'error');
+                        return;
+                    }
+
+                    // Process data with column mapping
+                    excelData = jsonData.map(row => {
+                        const processedRow = {};
+                        
+                        // Use original column names but create standardized property names
+                        Object.keys(row).forEach(key => {
+                            const trimmedKey = key.trim();
+                            processedRow[trimmedKey] = row[key];
+                        });
+                        
+                        return {
+                            Sector: processedRow.Sector,
+                            Company: processedRow.Company,
+                            Date: parseDate(processedRow.Date),
+                            Hiring_Volume_M12: parseFloat(processedRow.Hiring_Volume_M12) || 0,
+                            Location_Similarity_M: parseFloat(processedRow.Location_Similarity_M) || 0,
+                            Demanded_Volume_M12: (processedRow.Demanded_Volume_M12 === null || processedRow.Demanded_Volume_M12 === undefined || processedRow.Demanded_Volume_M12 === '' || isNaN(parseFloat(processedRow.Demanded_Volume_M12))) ? 0 : parseFloat(processedRow.Demanded_Volume_M12),
+                            Return: parseFloat(processedRow.Return) || 0,
+                            SP500: parseFloat(processedRow.SP500) || 0
+                        };
+                    }).filter(row => row.Date);
+
+                    // Create company to sector mapping
+                    companyToSectorMap = {};
+                    excelData.forEach(row => {
+                        if (!companyToSectorMap[row.Company]) {
+                            companyToSectorMap[row.Company] = row.Sector;
+                        }
+                    });
+
+                    populateDropdowns();
+                    setDefaultValues();
+                    showStatus(`✅ Successfully loaded ${excelData.length} records`, 'success');
+                    document.getElementById('controlsSection').style.display = 'block';
+                    
+                    // Show default sector
+                    updateSectorChart();
+                    updateComparisonChart();
+                    updateIndicatorsChart();
+
+                } catch (error) {
+                    showStatus(`❌ Error processing file: ${error.message}`, 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function parseDate(dateValue) {
+            if (dateValue instanceof Date) return dateValue;
+            if (typeof dateValue === 'number') {
+                // Excel serial date
+                return new Date((dateValue - 25569) * 86400 * 1000);
+            }
+            if (typeof dateValue === 'string') {
+                const date = new Date(dateValue);
+                return isNaN(date) ? null : date;
+            }
+            return null;
+        }
+
+        function populateDropdowns() {
+            // Populate sectors for first chart
+            const sectors = [...new Set(excelData.map(row => row.Sector))].sort();
+            const sectorSelect1 = document.getElementById('sectorSelect1');
+            sectorSelect1.innerHTML = '<option value="">Choose Sector...</option>';
+            sectors.forEach(sector => {
+                const option = document.createElement('option');
+                option.value = sector;
+                option.textContent = sector;
+                sectorSelect1.appendChild(option);
+            });
+
+            // Populate companies for second chart
+            const companies = [...new Set(excelData.map(row => row.Company))].sort();
+            const companySelect2 = document.getElementById('companySelect2');
+            companySelect2.innerHTML = '<option value="">Choose Company...</option>';
+            companies.forEach(company => {
+                const option = document.createElement('option');
+                option.value = company;
+                option.textContent = company;
+                companySelect2.appendChild(option);
+            });
+        }
+
+        function setDefaultValues() {
+            // Set default values
+            const sectorSelect = document.getElementById('sectorSelect1');
+            const companySelect = document.getElementById('companySelect2');
+            const indicatorSelect = document.getElementById('indicatorSelect2');
+
+            // Set Information Technology as default sector if available
+            if ([...sectorSelect.options].some(option => option.value === 'Information Technology')) {
+                sectorSelect.value = 'Information Technology';
+            }
+
+            // Set AAPL.OQ as default company if available
+            if ([...companySelect.options].some(option => option.value === 'AAPL.OQ')) {
+                companySelect.value = 'AAPL.OQ';
+            }
+
+            // Set Hiring Volume M12 as default indicator
+            indicatorSelect.value = 'Hiring_Volume_M12';
+        }
+
+        function getMonthlyAverages(data, indicator) {
+            const monthlyData = {};
+            
+            data.forEach(row => {
+                const yearMonth = `${row.Date.getFullYear()}-${String(row.Date.getMonth() + 1).padStart(2, '0')}`;
+                if (!monthlyData[yearMonth]) {
+                    monthlyData[yearMonth] = { values: [], date: row.Date };
+                }
+                if (row[indicator] !== undefined && row[indicator] !== null) {
+                    monthlyData[yearMonth].values.push(row[indicator]);
+                }
+            });
+
+            // Calculate averages and sort by date
+            const result = Object.keys(monthlyData)
+                .filter(key => monthlyData[key].values.length > 0)
+                .map(key => ({
+                    yearMonth: key,
+                    date: monthlyData[key].date,
+                    average: monthlyData[key].values.reduce((a, b) => a + b, 0) / monthlyData[key].values.length
+                }))
+                .sort((a, b) => a.date - b.date);
+
+            return result;
+        }
+
+        function calculate12MonthMovingAverage(data) {
+            if (data.length < 12) return data;
+            
+            const result = [];
+            for (let i = 11; i < data.length; i++) {
+                const window = data.slice(i - 11, i + 1);
+                const average = window.reduce((sum, item) => sum + item.average, 0) / 12;
+                result.push({
+                    yearMonth: data[i].yearMonth,
+                    date: data[i].date,
+                    average: average
+                });
+            }
+            return result;
+        }
+
+        function showAllSectors() {
+            document.getElementById('sectorSelect1').value = '';
+            updateSectorChart();
+        }
+
+        function minMaxScale(data) {
+            if (data.length === 0) return data;
+            
+            const values = data.map(d => d.average);
+            const min = Math.min(...values);
+            const max = Math.max(...values);
+            
+            if (min === max) return data; // Avoid division by zero
+            
+            return data.map(d => ({
+                ...d,
+                average: (d.average - min) / (max - min)
+            }));
+        }
+
+        function updateSectorChart() {
+            const selectedSector = document.getElementById('sectorSelect1').value;
+            
+            document.getElementById('chartsSection').style.display = 'block';
+            
+            const ctx = document.getElementById('sectorChart').getContext('2d');
+            
+            if (sectorChart) {
+                sectorChart.destroy();
+            }
+
+            // Removed 'Return' from the indicators array for Chart 1
+            const indicators = ['Hiring_Volume_M12', 'Location_Similarity_M', 'Demanded_Volume_M12', 'SP500'];
+            const colors = ['#667eea', '#e53e3e', '#38a169', '#9f7aea'];
+            const datasets = [];
+
+            if (selectedSector) {
+                // Show single sector with all indicators (excluding Return)
+                document.getElementById('chart1Title').textContent = `${selectedSector} Sector - All Indicators + SP500`;
+                
+                const sectorData = excelData.filter(row => row.Sector === selectedSector);
+                
+                indicators.forEach((indicator, index) => {
+                    let monthlyAverages = getMonthlyAverages(sectorData, indicator);
+                    
+                    // Apply min-max scaling for better visualization
+                    monthlyAverages = minMaxScale(monthlyAverages);
+                    
+                    datasets.push({
+                        label: indicator.replace(/_/g, ' '),
+                        data: monthlyAverages.map(d => d.average),
+                        borderColor: colors[index],
+                        backgroundColor: colors[index] + '20',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.4
+                    });
+                });
+
+                // Use the first indicator's monthly data for labels
+                const firstIndicatorData = getMonthlyAverages(sectorData, indicators[0]);
+                var labels = firstIndicatorData.map(d => d.yearMonth);
+
+            } else {
+                // Show all sectors aggregated with all indicators (excluding Return)
+                document.getElementById('chart1Title').textContent = 'All Sectors - Aggregate Analysis + SP500 (Min-Max Scaled)';
+                
+                indicators.forEach((indicator, index) => {
+                    let monthlyAverages = getMonthlyAverages(excelData, indicator);
+                    
+                    // Apply min-max scaling to aggregated values
+                    monthlyAverages = minMaxScale(monthlyAverages);
+                    
+                    datasets.push({
+                        label: `All Sectors - ${indicator.replace(/_/g, ' ')}`,
+                        data: monthlyAverages.map(d => d.average),
+                        borderColor: colors[index],
+                        backgroundColor: colors[index] + '20',
+                        borderWidth: 2,
+                        fill: false,
+                        tension: 0.4
+                    });
+                });
+
+                // Use the first indicator's monthly data for labels
+                const firstIndicatorData = getMonthlyAverages(excelData, indicators[0]);
+                var labels = firstIndicatorData.map(d => d.yearMonth);
+            }
+
+            sectorChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time Period',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            grid: { display: true, color: 'rgba(0,0,0,0.1)' }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Min-Max Scaled Values (0-1)',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            grid: { display: true, color: 'rgba(0,0,0,0.1)' },
+                            min: 0,
+                            max: 1
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateCompanySelection() {
+            const selectedCompany = document.getElementById('companySelect2').value;
+            updateComparisonChart();
+            updateIndicatorsChart();
+        }
+
+        function updateComparisonChart() {
+            const selectedCompany = document.getElementById('companySelect2').value;
+            const selectedIndicator = document.getElementById('indicatorSelect2').value;
+
+            if (!selectedCompany || !selectedIndicator) {
+                if (comparisonChart) {
+                    comparisonChart.destroy();
+                    comparisonChart = null;
+                }
+                document.getElementById('chart2Title').textContent = 'Company vs Sector vs SP500 Comparison';
+                return;
+            }
+
+            const companySector = companyToSectorMap[selectedCompany];
+            document.getElementById('chart2Title').textContent = `${selectedCompany} vs ${companySector} Sector vs SP500`;
+
+            const ctx = document.getElementById('comparisonChart').getContext('2d');
+            
+            if (comparisonChart) {
+                comparisonChart.destroy();
+            }
+
+            // Get company data
+            const companyData = excelData.filter(row => row.Company === selectedCompany);
+            const companyIndicatorData = getMonthlyAverages(companyData, selectedIndicator);
+            const companySP500Data = getMonthlyAverages(companyData, 'SP500');
+
+            // Get sector data
+            const sectorData = excelData.filter(row => row.Sector === companySector);
+            const sectorIndicatorData = getMonthlyAverages(sectorData, selectedIndicator);
+
+            // Use company data timeline as base for labels
+            const labels = companyIndicatorData.map(d => d.yearMonth);
+
+            const datasets = [
+                {
+                    label: `${selectedCompany} - ${selectedIndicator.replace(/_/g, ' ')}`,
+                    data: companyIndicatorData.map(d => d.average),
+                    borderColor: '#667eea',
+                    backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.4
+                },
+                {
+                    label: `${companySector} Sector - ${selectedIndicator.replace(/_/g, ' ')}`,
+                    data: sectorIndicatorData.map(d => d.average),
+                    borderColor: '#38a169',
+                    backgroundColor: 'rgba(56, 161, 105, 0.1)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.4
+                },
+                {
+                    label: `${selectedCompany} - SP500`,
+                    data: companySP500Data.map(d => d.average),
+                    borderColor: '#e53e3e',
+                    backgroundColor: 'rgba(229, 62, 62, 0.1)',
+                    borderWidth: 3,
+                    fill: false,
+                    tension: 0.4
+                }
+            ];
+
+            comparisonChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time Period',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            grid: { display: true, color: 'rgba(0,0,0,0.1)' }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Values',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            grid: { display: true, color: 'rgba(0,0,0,0.1)' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateIndicatorsChart() {
+            const selectedCompany = document.getElementById('companySelect2').value;
+
+            if (!selectedCompany) {
+                if (indicatorsChart) {
+                    indicatorsChart.destroy();
+                    indicatorsChart = null;
+                }
+                document.getElementById('chart3Title').textContent = '12-Month Moving Average Analysis';
+                return;
+            }
+
+            const companySector = companyToSectorMap[selectedCompany];
+            document.getElementById('chart3Title').textContent = `${selectedCompany} - 12-Month Moving Average Analysis`;
+
+            const ctx = document.getElementById('indicatorsChart').getContext('2d');
+            
+            if (indicatorsChart) {
+                indicatorsChart.destroy();
+            }
+
+            // Get company data
+            const companyData = excelData.filter(row => row.Company === selectedCompany);
+            
+            const indicators = ['Hiring_Volume_M12', 'Location_Similarity_M', 'Demanded_Volume_M12', 'Return'];
+            const colors = ['#667eea', '#e53e3e', '#38a169', '#ff6b35'];
+            const datasets = [];
+
+            indicators.forEach((indicator, index) => {
+                let monthlyAverages = getMonthlyAverages(companyData, indicator);
+                
+                // Apply 12-month moving average
+                let movingAverage = calculate12MonthMovingAverage(monthlyAverages);
+                
+                datasets.push({
+                    label: `${indicator.replace(/_/g, ' ')} (12M MA)`,
+                    data: movingAverage.map(d => d.average),
+                    borderColor: colors[index],
+                    backgroundColor: colors[index] + '20',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.4
+                });
+            });
+
+            // Use the first indicator's 12-month moving average data for labels
+            const firstIndicatorData = getMonthlyAverages(companyData, indicators[0]);
+            const firstMovingAverage = calculate12MonthMovingAverage(firstIndicatorData);
+            const labels = firstMovingAverage.map(d => d.yearMonth);
+
+            indicatorsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time Period',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            grid: { display: true, color: 'rgba(0,0,0,0.1)' }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: '12-Month Moving Average Values',
+                                font: { size: 14, weight: 'bold' }
+                            },
+                            grid: { display: true, color: 'rgba(0,0,0,0.1)' }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+</body>
+</html>
