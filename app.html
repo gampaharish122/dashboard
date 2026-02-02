@@ -245,11 +245,9 @@
             .controls {
                 flex-direction: column;
             }
-            
             .header h1 {
                 font-size: 2rem;
             }
-            
             .overall-charts {
                 grid-template-columns: 1fr;
             }
@@ -260,11 +258,12 @@
     <div class="dashboard">
         <div class="header">
             <h1>📊 Enhanced Earnings Call Analytics Dashboard</h1>
-            <p>Advanced sentiment analysis with sum calculations, primary industry support, and comparison features</p>
+            <p>Advanced sentiment analysis with sum calculations and automated data loading</p>
         </div>
 
-        <div class="upload-area">
-            <p>📁 Upload your CSV file (must include: company, quarter, primary_industry, and metric columns)</p>
+        <div class="upload-area" id="uploadArea">
+            <p>📁 Currently using: <strong>sample2.csv</strong></p>
+            <p style="font-size: 0.8rem; color: #666; margin-top: 5px;">Or upload a new CSV to replace it:</p>
             <input type="file" id="fileInput" accept=".csv" style="margin-top: 10px;">
         </div>
 
@@ -331,7 +330,6 @@
         </div>
 
         <div id="comparisonInfo" class="comparison-info" style="display: none;"></div>
-
         <div id="summaryCards" class="summary-cards" style="display: none;"></div>
 
         <div id="chartsContainer" style="display: none;">
@@ -359,7 +357,7 @@
         </div>
 
         <div id="loading" class="loading">
-            <p>Upload your CSV file to begin analysis...</p>
+            <p>📡 Initializing and fetching sample2.csv...</p>
         </div>
     </div>
 
@@ -371,252 +369,164 @@
         let isOverallView = false;
         let isIndustryCompare = false;
 
-        // File upload handler
-        document.getElementById('fileInput').addEventListener('change', handleFile);
+        // --- DATA LOADING LOGIC ---
 
-        function handleFile(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+        window.onload = function() {
+            // Hardcode loading of sample2.csv
+            fetchAndParseCSV('sample2.csv');
+        };
 
-            if (!file.name.toLowerCase().endsWith('.csv')) {
-                alert('Please upload a CSV file only.');
-                return;
-            }
-            
-            parseCSV(file);
+        function fetchAndParseCSV(url) {
+            document.getElementById('loading').innerHTML = `<p>📡 Loading ${url}...</p>`;
+            Papa.parse(url, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                dynamicTyping: true,
+                complete: function(results) {
+                    globalData = results.data;
+                    validateAndInitialize();
+                },
+                error: function(err) {
+                    console.error("PapaParse error:", err);
+                    document.getElementById('loading').innerHTML = `
+                        <p>❌ Error: Could not find <strong>sample2.csv</strong> in this directory.</p>
+                        <p style="font-size: 0.9rem; margin-top:10px;">Please upload a file manually below or use a local server.</p>
+                    `;
+                }
+            });
         }
 
-        function parseCSV(file) {
-            document.getElementById('loading').innerHTML = '<p>📊 Processing your data...</p>';
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('loading').innerHTML = '<p>📊 Processing uploaded file...</p>';
             
             Papa.parse(file, {
                 header: true,
                 skipEmptyLines: true,
                 dynamicTyping: true,
                 complete: function(results) {
-                    if (results.errors.length > 0) {
-                        console.error('CSV parsing errors:', results.errors);
-                    }
-                    
                     globalData = results.data;
                     validateAndInitialize();
-                },
-                error: function(error) {
-                    console.error('Error parsing CSV:', error);
-                    document.getElementById('loading').innerHTML = '<p>❌ Error parsing file. Please check your CSV format.</p>';
                 }
             });
-        }
+        });
 
-        function parseQuarter(quarterStr) {
-            // Handle various quarter formats and convert to "Q# YYYY" format
-            if (!quarterStr) return { formatted: '', sortKey: '' };
-            
-            const str = quarterStr.toString().trim();
-            
-            // Match patterns like "Q1 2023", "2023 Q1", "2023Q1", "Q1-2023", etc.
-            const patterns = [
-                /^Q([1-4])\s*(\d{4})$/i,           // Q1 2023
-                /^(\d{4})\s*Q([1-4])$/i,           // 2023 Q1
-                /^(\d{4})Q([1-4])$/i,              // 2023Q1
-                /^Q([1-4])-(\d{4})$/i,             // Q1-2023
-                /^Q([1-4])_(\d{4})$/i,             // Q1_2023
-                /^([1-4])Q(\d{4})$/i,              // 1Q2023
-                /^(\d{4})-Q([1-4])$/i,             // 2023-Q1
-                /^(\d{4})_Q([1-4])$/i              // 2023_Q1
-            ];
-            
-            for (let pattern of patterns) {
-                const match = str.match(pattern);
-                if (match) {
-                    let quarter, year;
-                    
-                    // Determine which group is quarter and which is year
-                    if (match[1].length === 4) {
-                        // First group is year
-                        year = match[1];
-                        quarter = match[2];
-                    } else {
-                        // First group is quarter
-                        quarter = match[1];
-                        year = match[2];
-                    }
-                    
-                    const formatted = `Q${quarter} ${year}`;
-                    const sortKey = `${year}Q${quarter}`;
-                    
-                    return { formatted, sortKey };
-                }
-            }
-            
-            // If no pattern matches, return original
-            console.warn(`Could not parse quarter format: ${quarterStr}`);
-            return { formatted: str, sortKey: str };
-        }
+        // --- DASHBOARD INITIALIZATION ---
 
         function validateAndInitialize() {
-            if (globalData.length === 0) {
-                document.getElementById('loading').innerHTML = '<p>❌ No data found in file.</p>';
+            if (!globalData || globalData.length === 0) {
+                document.getElementById('loading').innerHTML = '<p>❌ Data is empty or invalid.</p>';
                 return;
             }
 
-            // Check for required columns
-            const requiredColumns = ['company', 'quarter'];
+            // Ensure required columns exist
             const availableColumns = Object.keys(globalData[0] || {});
-            const missingColumns = requiredColumns.filter(col => !availableColumns.includes(col));
-            
-            if (missingColumns.length > 0) {
-                document.getElementById('loading').innerHTML = 
-                    `<p>❌ Missing required columns: ${missingColumns.join(', ')}<br>
-                    Available columns: ${availableColumns.join(', ')}</p>`;
+            if (!availableColumns.includes('company') || !availableColumns.includes('quarter')) {
+                document.getElementById('loading').innerHTML = `<p>❌ Missing 'company' or 'quarter' columns.</p>`;
                 return;
             }
 
-            // Check if primary_industry exists, if not create a default one
-            if (!availableColumns.includes('primary_industry')) {
-                console.log('primary_industry column not found, adding default values');
-                globalData.forEach(row => {
-                    row.primary_industry = 'General';
-                });
-            } else {
-                console.log('primary_industry column found');
-                // Clean up any null/undefined values in existing primary_industry column
-                globalData.forEach(row => {
-                    if (!row.primary_industry || row.primary_industry.toString().trim() === '') {
-                        row.primary_industry = 'General';
-                    }
-                });
-            }
-
-            // Parse and format quarters
+            // Clean up industry column
             globalData.forEach(row => {
-                const parsedQuarter = parseQuarter(row.quarter);
-                row.quarter_formatted = parsedQuarter.formatted;
-                row.quarter_sort_key = parsedQuarter.sortKey;
+                if (!row.primary_industry || row.primary_industry.toString().trim() === '') {
+                    row.primary_industry = 'General';
+                }
+                const parsedQ = parseQuarter(row.quarter);
+                row.quarter_formatted = parsedQ.formatted;
+                row.quarter_sort_key = parsedQ.sortKey;
             });
-            
-            console.log('Sample data after processing:', globalData.slice(0, 3)); // Debug log
 
-            initializeDashboard();
-        }
-
-        function initializeDashboard() {
-            // Show controls and charts
+            // Show UI
             document.getElementById('controls').style.display = 'flex';
             document.getElementById('summaryCards').style.display = 'grid';
             document.getElementById('chartsContainer').style.display = 'block';
             document.getElementById('loading').style.display = 'none';
 
-            // Populate dropdowns
-            populateIndustryDropdown(); // Populate industry first
-            populateCompanyDropdown();  // Then populate company based on industry
+            // Init Dropdowns
+            populateIndustryDropdown();
+            populateCompanyDropdown();
             populateCompareDropdown();
             
-            // Set up event listeners
-            document.getElementById('companySelect').addEventListener('change', () => {
-                populateCompareDropdown();
-                updateDashboard();
-            });
-            document.getElementById('industrySelect').addEventListener('change', () => {
-                populateCompanyDropdown(); // Update company dropdown when industry changes
-                populateCompareDropdown();
-                updateDashboard();
-            });
-            document.getElementById('metricSelect').addEventListener('change', updateDashboard);
-            document.getElementById('quarterRange').addEventListener('change', updateDashboard);
-            document.getElementById('compareSelect').addEventListener('change', updateDashboard);
-            document.getElementById('overallBtn').addEventListener('click', toggleOverallView);
-            document.getElementById('industryCompareBtn').addEventListener('click', toggleIndustryCompare);
+            // Event Listeners
+            setupListeners();
 
-            // Initial dashboard update
+            // Render
             updateDashboard();
         }
 
-        function populateCompanyDropdown() {
-            const selectedIndustry = document.getElementById('industrySelect').value;
-            let companies;
-            
-            if (selectedIndustry === 'all') {
-                // Show all companies if "All Industries" is selected
-                companies = [...new Set(globalData.map(row => row.company))].filter(Boolean).sort();
-            } else {
-                // Show only companies from the selected industry
-                companies = [...new Set(globalData
-                    .filter(row => row.primary_industry === selectedIndustry)
-                    .map(row => row.company))]
-                    .filter(Boolean)
-                    .sort();
+        function setupListeners() {
+            document.getElementById('companySelect').onchange = () => { populateCompareDropdown(); updateDashboard(); };
+            document.getElementById('industrySelect').onchange = () => { populateCompanyDropdown(); populateCompareDropdown(); updateDashboard(); };
+            document.getElementById('metricSelect').onchange = updateDashboard;
+            document.getElementById('quarterRange').onchange = updateDashboard;
+            document.getElementById('compareSelect').onchange = updateDashboard;
+            document.getElementById('overallBtn').onclick = toggleOverallView;
+            document.getElementById('industryCompareBtn').onclick = toggleIndustryCompare;
+        }
+
+        // --- UTILITIES ---
+
+        function parseQuarter(qStr) {
+            if (!qStr) return { formatted: 'N/A', sortKey: '0' };
+            const str = qStr.toString().trim();
+            const patterns = [
+                /^Q([1-4])\s*(\d{4})$/i, /^(\d{4})\s*Q([1-4])$/i, /^(\d{4})Q([1-4])$/i,
+                /^Q([1-4])-(\d{4})$/i, /^([1-4])Q(\d{4})$/i, /^(\d{4})-Q([1-4])$/i
+            ];
+            for (let p of patterns) {
+                const m = str.match(p);
+                if (m) {
+                    let q, y;
+                    if (m[1].length === 4) { y = m[1]; q = m[2]; } else { q = m[1]; y = m[2]; }
+                    return { formatted: `Q${q} ${y}`, sortKey: `${y}Q${q}` };
+                }
             }
-            
-            const select = document.getElementById('companySelect');
-            const currentSelection = select.value;
-            
-            select.innerHTML = '<option value="all">All Companies</option>';
-            
-            companies.forEach(company => {
-                const option = document.createElement('option');
-                option.value = company;
-                option.textContent = company;
-                select.appendChild(option);
-            });
-            
-            // Try to maintain the current selection if it's still valid
-            if (currentSelection !== 'all' && companies.includes(currentSelection)) {
-                select.value = currentSelection;
-            } else {
-                select.value = 'all';
-            }
+            return { formatted: str, sortKey: str };
         }
 
         function populateIndustryDropdown() {
-            // Get unique industry values, handling both null/undefined and actual values
-            const industries = [...new Set(globalData.map(row => {
-                // Handle cases where primary_industry might be null, undefined, or empty string
-                const industry = row.primary_industry;
-                return (industry && industry.toString().trim()) ? industry.toString().trim() : 'General';
-            }))].filter(Boolean).sort();
-            
-            console.log('Available industries:', industries); // Debug log
-            
-            const select = document.getElementById('industrySelect');
-            
-            select.innerHTML = '<option value="all">All Industries</option>';
-            
-            industries.forEach(industry => {
-                const option = document.createElement('option');
-                option.value = industry;
-                option.textContent = industry;
-                select.appendChild(option);
+            const industries = [...new Set(globalData.map(r => r.primary_industry))].sort();
+            const sel = document.getElementById('industrySelect');
+            sel.innerHTML = '<option value="all">All Industries</option>';
+            industries.forEach(ind => {
+                const opt = document.createElement('option');
+                opt.value = opt.textContent = ind;
+                sel.appendChild(opt);
             });
         }
 
+        function populateCompanyDropdown() {
+            const ind = document.getElementById('industrySelect').value;
+            const companies = [...new Set(globalData
+                .filter(r => ind === 'all' || r.primary_industry === ind)
+                .map(r => r.company))].sort();
+            const sel = document.getElementById('companySelect');
+            const prev = sel.value;
+            sel.innerHTML = '<option value="all">All Companies</option>';
+            companies.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = opt.textContent = c;
+                sel.appendChild(opt);
+            });
+            if (companies.includes(prev)) sel.value = prev;
+        }
+
         function populateCompareDropdown() {
-            const selectedCompany = document.getElementById('companySelect').value;
-            const selectedIndustry = document.getElementById('industrySelect').value;
-            let companies;
-            
-            if (selectedIndustry === 'all') {
-                // Show all companies if "All Industries" is selected
-                companies = [...new Set(globalData.map(row => row.company))].filter(Boolean).sort();
-            } else {
-                // Show only companies from the selected industry
-                companies = [...new Set(globalData
-                    .filter(row => row.primary_industry === selectedIndustry)
-                    .map(row => row.company))]
-                    .filter(Boolean)
-                    .sort();
-            }
-            
-            const select = document.getElementById('compareSelect');
-            
-            select.innerHTML = '<option value="none">No Comparison</option>';
-            
-            companies.forEach(company => {
-                if (company !== selectedCompany) {
-                    const option = document.createElement('option');
-                    option.value = company;
-                    option.textContent = `vs ${company}`;
-                    select.appendChild(option);
+            const current = document.getElementById('companySelect').value;
+            const ind = document.getElementById('industrySelect').value;
+            const companies = [...new Set(globalData
+                .filter(r => ind === 'all' || r.primary_industry === ind)
+                .map(r => r.company))].sort();
+            const sel = document.getElementById('compareSelect');
+            sel.innerHTML = '<option value="none">No Comparison</option>';
+            companies.forEach(c => {
+                if (c !== current) {
+                    const opt = document.createElement('option');
+                    opt.value = c; opt.textContent = `vs ${c}`;
+                    sel.appendChild(opt);
                 }
             });
         }
@@ -624,656 +534,154 @@
         function toggleOverallView() {
             isOverallView = !isOverallView;
             const btn = document.getElementById('overallBtn');
-            const singleContainer = document.getElementById('singleChartContainer');
-            const overallContainer = document.getElementById('overallChartsContainer');
-            
-            if (isOverallView) {
-                btn.textContent = '📈 Single Metric';
-                btn.classList.add('active');
-                singleContainer.style.display = 'none';
-                overallContainer.style.display = 'grid';
-            } else {
-                btn.textContent = '📊 Overall View';
-                btn.classList.remove('active');
-                singleContainer.style.display = 'block';
-                overallContainer.style.display = 'none';
-            }
-            
+            btn.textContent = isOverallView ? '📈 Single Metric' : '📊 Overall View';
+            btn.classList.toggle('active', isOverallView);
+            document.getElementById('singleChartContainer').style.display = isOverallView ? 'none' : 'block';
+            document.getElementById('overallChartsContainer').style.display = isOverallView ? 'grid' : 'none';
             updateDashboard();
         }
 
         function toggleIndustryCompare() {
-            const selectedCompany = document.getElementById('companySelect').value;
-            
-            if (selectedCompany === 'all') {
-                alert('Please select a specific company to compare with industry.');
-                return;
+            if (document.getElementById('companySelect').value === 'all') {
+                alert('Select a company first.'); return;
             }
-
             isIndustryCompare = !isIndustryCompare;
             const btn = document.getElementById('industryCompareBtn');
-            
-            if (isIndustryCompare) {
-                btn.textContent = '📊 Single View';
-                btn.classList.add('active');
-            } else {
-                btn.textContent = '🏭 Industry Compare';
-                btn.classList.remove('active');
-            }
-            
+            btn.textContent = isIndustryCompare ? '📊 Single View' : '🏭 Industry Compare';
+            btn.classList.toggle('active', isIndustryCompare);
             updateDashboard();
         }
 
+        // --- RENDERING ---
+
         function updateDashboard() {
-            const selectedCompany = document.getElementById('companySelect').value;
-            const selectedIndustry = document.getElementById('industrySelect').value;
-            const selectedMetric = document.getElementById('metricSelect').value;
-            const quarterRange = document.getElementById('quarterRange').value;
-            const compareWith = document.getElementById('compareSelect').value;
+            const co = document.getElementById('companySelect').value;
+            const ind = document.getElementById('industrySelect').value;
+            const met = document.getElementById('metricSelect').value;
+            const rng = document.getElementById('quarterRange').value;
+            const comp = document.getElementById('compareSelect').value;
 
-            // Filter data
-            let filteredData = globalData;
-            
-            if (selectedCompany !== 'all') {
-                filteredData = filteredData.filter(row => row.company === selectedCompany);
-            }
-            
-            if (selectedIndustry !== 'all') {
-                filteredData = filteredData.filter(row => row.primary_industry === selectedIndustry);
-            }
+            let filtered = globalData;
+            if (co !== 'all') filtered = filtered.filter(r => r.company === co);
+            if (ind !== 'all') filtered = filtered.filter(r => r.primary_industry === ind);
 
-            // Apply quarter filtering
-            if (quarterRange !== 'all' && !isOverallView) {
-                // Get unique quarters sorted by sort key
-                const quarters = [...new Set(filteredData.map(row => ({ 
-                    formatted: row.quarter_formatted, 
-                    sortKey: row.quarter_sort_key 
-                })))].sort((a, b) => a.sortKey.localeCompare(b.sortKey));
-                
-                const numQuarters = parseInt(quarterRange.replace('recent', ''));
-                const recentQuarters = quarters.slice(-numQuarters).map(q => q.formatted);
-                filteredData = filteredData.filter(row => recentQuarters.includes(row.quarter_formatted));
+            if (rng !== 'all' && !isOverallView) {
+                const qts = [...new Set(filtered.map(r => ({f: r.quarter_formatted, s: r.quarter_sort_key})))]
+                    .sort((a,b) => a.s.localeCompare(b.s));
+                const num = parseInt(rng.replace('recent',''));
+                const targetQs = qts.slice(-num).map(q => q.f);
+                filtered = filtered.filter(r => targetQs.includes(r.quarter_formatted));
             }
 
-            updateSummaryCards(filteredData);
-            updateComparisonInfo(selectedCompany, compareWith, isIndustryCompare);
+            updateSummaryCards(filtered);
+            updateComparisonInfo(co, comp, isIndustryCompare);
             
-            if (isOverallView) {
-                createOverallCharts(filteredData, compareWith);
-            } else {
-                createTimeSeriesChart(filteredData, selectedMetric, compareWith);
-            }
+            if (isOverallView) createOverallCharts(filtered, comp);
+            else createTimeSeriesChart(filtered, met, comp);
         }
 
-        function updateComparisonInfo(selectedCompany, compareWith, industryMode) {
-            const infoDiv = document.getElementById('comparisonInfo');
-            
-            if (compareWith !== 'none' || industryMode) {
-                let infoText = '';
-                if (industryMode && selectedCompany !== 'all') {
-                    const companyIndustry = globalData.find(row => row.company === selectedCompany)?.primary_industry;
-                    infoText = `🏭 Comparing ${selectedCompany} with ${companyIndustry} Industry Average`;
-                } else if (compareWith !== 'none') {
-                    infoText = `🔄 Comparing ${selectedCompany} vs ${compareWith}`;
+        function updateComparisonInfo(co, comp, indMode) {
+            const div = document.getElementById('comparisonInfo');
+            if (comp !== 'none' || (indMode && co !== 'all')) {
+                div.style.display = 'block';
+                if (indMode) {
+                    const cInd = globalData.find(r => r.company === co)?.primary_industry;
+                    div.textContent = `🏭 Comparing ${co} with ${cInd} Industry Average`;
+                } else {
+                    div.textContent = `🔄 Comparing ${co} vs ${comp}`;
                 }
-                
-                infoDiv.textContent = infoText;
-                infoDiv.style.display = 'block';
-            } else {
-                infoDiv.style.display = 'none';
-            }
+            } else div.style.display = 'none';
         }
 
         function updateSummaryCards(data) {
-            const container = document.getElementById('summaryCards');
+            const total = data.length;
+            const pos = data.reduce((s, r) => s + (r.question_LM_Positive || 0) + (r.question_HIV4_Positive || 0), 0);
+            const neg = data.reduce((s, r) => s + (r.question_LM_Negative || 0) + (r.question_HIV4_Negative || 0), 0);
+            const cos = new Set(data.map(r => r.company)).size;
             
-            const totalQuestions = data.length;
-            
-            // Calculate sum positive (LM + HIV4 combined)
-            const sumPositive = data.reduce((sum, row) => {
-                const lmPos = row.question_LM_Positive || 0;
-                const hivPos = row.question_HIV4_Positive || 0;
-                return sum + lmPos + hivPos;
-            }, 0);
-
-            // Calculate sum negative (LM + HIV4 combined)
-            const sumNegative = data.reduce((sum, row) => {
-                const lmNeg = row.question_LM_Negative || 0;
-                const hivNeg = row.question_HIV4_Negative || 0;
-                return sum + lmNeg + hivNeg;
-            }, 0);
-            
-            const companies = new Set(data.map(row => row.company)).size;
-            const industries = new Set(data.map(row => row.primary_industry)).size;
-
-            container.innerHTML = `
-                <div class="summary-card">
-                    <h3>${totalQuestions}</h3>
-                    <p>Total Questions</p>
-                </div>
-                <div class="summary-card">
-                    <h3 class="positive">${sumPositive.toFixed(2)}</h3>
-                    <p>Sum Positive (LM+HIV4)</p>
-                </div>
-                <div class="summary-card">
-                    <h3 class="negative">${sumNegative.toFixed(2)}</h3>
-                    <p>Sum Negative (LM+HIV4)</p>
-                </div>
-                <div class="summary-card">
-                    <h3>${companies}</h3>
-                    <p>Companies</p>
-                </div>
-                <div class="summary-card">
-                    <h3>${industries}</h3>
-                    <p>Industries</p>
-                </div>
+            document.getElementById('summaryCards').innerHTML = `
+                <div class="summary-card"><h3>${total}</h3><p>Total Questions</p></div>
+                <div class="summary-card"><h3 class="positive">${pos.toFixed(2)}</h3><p>Sum Positive</p></div>
+                <div class="summary-card"><h3 class="negative">${neg.toFixed(2)}</h3><p>Sum Negative</p></div>
+                <div class="summary-card"><h3>${cos}</h3><p>Companies</p></div>
             `;
         }
 
         function createTimeSeriesChart(data, metric, compareWith) {
-            // Destroy existing chart
-            if (currentChart) {
-                currentChart.destroy();
-                currentChart = null;
-            }
-
-            if (data.length === 0) {
-                document.getElementById('timeSeriesChart').getContext('2d').clearRect(0, 0, 1000, 1000);
-                return;
-            }
-
+            if (currentChart) currentChart.destroy();
             const ctx = document.getElementById('timeSeriesChart').getContext('2d');
             
-            // Group data by quarter and calculate sums
-            const quarterData = data.reduce((acc, row) => {
-                const quarter = row.quarter_formatted;
-                if (!acc[quarter]) acc[quarter] = [];
-                acc[quarter].push(row);
+            const qMap = data.reduce((acc, r) => {
+                if(!acc[r.quarter_formatted]) acc[r.quarter_formatted] = [];
+                acc[r.quarter_formatted].push(r);
                 return acc;
             }, {});
 
-            // Sort quarters by their sort keys
-            const quarterEntries = Object.entries(quarterData);
-            quarterEntries.sort((a, b) => {
-                const aSortKey = data.find(row => row.quarter_formatted === a[0])?.quarter_sort_key || a[0];
-                const bSortKey = data.find(row => row.quarter_formatted === b[0])?.quarter_sort_key || b[0];
-                return aSortKey.localeCompare(bSortKey);
+            const labels = Object.keys(qMap).sort((a,b) => {
+                const sa = data.find(r => r.quarter_formatted === a).quarter_sort_key;
+                const sb = data.find(r => r.quarter_formatted === b).quarter_sort_key;
+                return sa.localeCompare(sb);
             });
 
-            const quarters = quarterEntries.map(entry => entry[0]);
-            const sortedQuarterData = Object.fromEntries(quarterEntries);
-
-            const sumValues = quarters.map(quarter => {
-                const values = sortedQuarterData[quarter].map(row => row[metric]).filter(val => val !== null && val !== undefined);
-                return values.reduce((sum, val) => sum + val, 0);
-            });
+            const values = labels.map(l => qMap[l].reduce((s, r) => s + (r[metric] || 0), 0));
 
             const datasets = [{
-                label: `${metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} (Sum)`,
-                data: sumValues,
-                borderColor: 'rgba(102, 126, 234, 1)',
+                label: `${metric} (Sum)`,
+                data: values,
+                borderColor: '#667eea',
                 backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                borderWidth: 3,
-                fill: true,
-                tension: 0.4,
-                pointBackgroundColor: 'rgba(102, 126, 234, 1)',
-                pointBorderColor: '#fff',
-                pointBorderWidth: 3,
-                pointRadius: 8,
-                pointHoverRadius: 12
+                fill: true, tension: 0.4
             }];
 
-            // Add comparison data
             if (compareWith !== 'none') {
-                const compareData = globalData.filter(row => row.company === compareWith);
-                const compareQuarterData = compareData.reduce((acc, row) => {
-                    const quarter = row.quarter_formatted;
-                    if (!acc[quarter]) acc[quarter] = [];
-                    acc[quarter].push(row);
-                    return acc;
-                }, {});
-
-                const compareSumValues = quarters.map(quarter => {
-                    const values = (compareQuarterData[quarter] || []).map(row => row[metric]).filter(val => val !== null && val !== undefined);
-                    return values.reduce((sum, val) => sum + val, 0);
-                });
-
-                datasets.push({
-                    label: `${compareWith} - ${metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} (Sum)`,
-                    data: compareSumValues,
-                    borderColor: 'rgba(231, 76, 60, 1)',
-                    backgroundColor: 'rgba(231, 76, 60, 0.1)',
-                    borderWidth: 3,
-                    fill: false,
-                    tension: 0.4,
-                    pointBackgroundColor: 'rgba(231, 76, 60, 1)',
-                    pointBorderColor: '#fff',
-                    pointBorderWidth: 3,
-                    pointRadius: 6,
-                    pointHoverRadius: 10
-                });
+                const cData = globalData.filter(r => r.company === compareWith);
+                const cValues = labels.map(l => cData.filter(r => r.quarter_formatted === l).reduce((s,r) => s + (r[metric] || 0), 0));
+                datasets.push({ label: `${compareWith} (Sum)`, data: cValues, borderColor: '#E74C3C', fill: false, tension: 0.4 });
             }
 
-            // Add industry comparison
-            if (isIndustryCompare && data.length > 0) {
-                const selectedCompany = document.getElementById('companySelect').value;
-                const companyIndustry = globalData.find(row => row.company === selectedCompany)?.primary_industry;
-                
-                if (companyIndustry) {
-                    // Get ALL companies in the same industry (including the selected company for industry total)
-                    const industryData = globalData.filter(row => row.primary_industry === companyIndustry);
-                    
-                    const industryQuarterData = industryData.reduce((acc, row) => {
-                        const quarter = row.quarter_formatted;
-                        if (!acc[quarter]) acc[quarter] = [];
-                        acc[quarter].push(row);
-                        return acc;
-                    }, {});
-
-                    const industrySumValues = quarters.map(quarter => {
-                        const values = (industryQuarterData[quarter] || []).map(row => row[metric]).filter(val => val !== null && val !== undefined);
-                        return values.reduce((sum, val) => sum + val, 0);
-                    });
-
-                    datasets.push({
-                        label: `${companyIndustry} Industry Total (Sum)`,
-                        data: industrySumValues,
-                        borderColor: 'rgba(243, 156, 18, 1)',
-                        backgroundColor: 'rgba(243, 156, 18, 0.1)',
-                        borderWidth: 3,
-                        fill: false,
-                        tension: 0.4,
-                        pointBackgroundColor: 'rgba(243, 156, 18, 1)',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 3,
-                        pointRadius: 6,
-                        pointHoverRadius: 10,
-                        borderDash: [5, 5]
-                    });
-                }
+            if (isIndustryCompare) {
+                const co = document.getElementById('companySelect').value;
+                const ind = globalData.find(r => r.company === co)?.primary_industry;
+                const iData = globalData.filter(r => r.primary_industry === ind);
+                const iValues = labels.map(l => iData.filter(r => r.quarter_formatted === l).reduce((s,r) => s + (r[metric] || 0), 0));
+                datasets.push({ label: `${ind} Total`, data: iValues, borderColor: '#F39C12', borderDash: [5,5], fill: false });
             }
-
-            // Update chart title
-            let titleText = `📈 Time Series Analysis - ${metric.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} (Sum Values)`;
-            document.getElementById('chartTitle').textContent = titleText;
 
             currentChart = new Chart(ctx, {
                 type: 'line',
-                data: {
-                    labels: quarters,
-                    datasets: datasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'top',
-                            labels: {
-                                font: {
-                                    size: 14,
-                                    weight: 'bold'
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.1)'
-                            },
-                            ticks: {
-                                font: {
-                                    size: 12
-                                }
-                            }
-                        },
-                        x: {
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.1)'
-                            },
-                            ticks: {
-                                font: {
-                                    size: 12
-                                },
-                                maxRotation: 45
-                            }
-                        }
-                    },
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
-                    }
-                }
+                data: { labels, datasets },
+                options: { responsive: true, maintainAspectRatio: false }
             });
         }
 
         function createOverallCharts(data, compareWith) {
-            // Destroy existing charts
-            if (questionChart) {
-                questionChart.destroy();
-                questionChart = null;
-            }
-            if (answerChart) {
-                answerChart.destroy();
-                answerChart = null;
-            }
+            if (questionChart) questionChart.destroy();
+            if (answerChart) answerChart.destroy();
 
-            if (data.length === 0) return;
+            const qMet = ['question_LM_Positive', 'question_LM_Negative', 'question_LM_Polarity', 'question_Uncertainty'];
+            const aMet = ['answer_LM_Positive', 'answer_LM_Negative', 'answer_LM_Polarity', 'answer_Uncertainty'];
 
-            // Question metrics
-            const questionMetrics = [
-                'question_LM_Positive', 'question_LM_Negative', 'question_LM_Polarity', 'question_LM_Subjectivity',
-                'question_HIV4_Positive', 'question_HIV4_Negative', 'question_HIV4_Polarity', 'question_HIV4_Subjectivity',
-                'question_Uncertainty', 'question_Litigious', 'question_Constraining'
-            ];
-
-            // Answer metrics
-            const answerMetrics = [
-                'answer_LM_Positive', 'answer_LM_Negative', 'answer_LM_Polarity', 'answer_LM_Subjectivity',
-                'answer_HIV4_Positive', 'answer_HIV4_Negative', 'answer_HIV4_Polarity', 'answer_HIV4_Subjectivity',
-                'answer_Uncertainty', 'answer_Litigious', 'answer_Constraining'
-            ];
-
-            // Group data by quarter and sort
-            const quarterData = data.reduce((acc, row) => {
-                const quarter = row.quarter_formatted;
-                if (!acc[quarter]) acc[quarter] = [];
-                acc[quarter].push(row);
-                return acc;
-            }, {});
-
-            // Sort quarters by their sort keys
-            const quarterEntries = Object.entries(quarterData);
-            quarterEntries.sort((a, b) => {
-                const aSortKey = data.find(row => row.quarter_formatted === a[0])?.quarter_sort_key || a[0];
-                const bSortKey = data.find(row => row.quarter_formatted === b[0])?.quarter_sort_key || b[0];
-                return aSortKey.localeCompare(bSortKey);
+            const labels = [...new Set(data.map(r => r.quarter_formatted))].sort((a,b) => {
+                return data.find(r => r.quarter_formatted === a).quarter_sort_key.localeCompare(data.find(r => r.quarter_formatted === b).quarter_sort_key);
             });
 
-            const quarters = quarterEntries.map(entry => entry[0]);
-            const sortedQuarterData = Object.fromEntries(quarterEntries);
+            const makeData = (metrics, d) => metrics.map((m, i) => ({
+                label: m.split('_').pop(),
+                data: labels.map(l => d.filter(r => r.quarter_formatted === l).reduce((s,r) => s + (r[m] || 0), 0)),
+                borderColor: `hsl(${i * 90}, 70%, 50%)`,
+                tension: 0.3
+            }));
 
-            // Create Question Chart
-            const questionCtx = document.getElementById('questionChart').getContext('2d');
-            const questionDatasets = questionMetrics.map((metric, index) => {
-                const sumValues = quarters.map(quarter => {
-                    const values = sortedQuarterData[quarter].map(row => row[metric]).filter(val => val !== null && val !== undefined);
-                    return values.reduce((sum, val) => sum + val, 0);
-                });
-
-                const hue = (index * 360 / questionMetrics.length) % 360;
-                return {
-                    label: metric.replace(/question_/g, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                    data: sumValues,
-                    borderColor: `hsl(${hue}, 70%, 50%)`,
-                    backgroundColor: `hsla(${hue}, 70%, 50%, 0.1)`,
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.3,
-                    pointRadius: 3,
-                    pointHoverRadius: 6
-                };
-            });
-
-            // Add comparison datasets for questions if needed
-            if (compareWith !== 'none') {
-                const compareData = globalData.filter(row => row.company === compareWith);
-                const compareQuarterData = compareData.reduce((acc, row) => {
-                    const quarter = row.quarter_formatted;
-                    if (!acc[quarter]) acc[quarter] = [];
-                    acc[quarter].push(row);
-                    return acc;
-                }, {});
-
-                questionMetrics.forEach((metric, index) => {
-                    const compareSumValues = quarters.map(quarter => {
-                        const values = (compareQuarterData[quarter] || []).map(row => row[metric]).filter(val => val !== null && val !== undefined);
-                        return values.reduce((sum, val) => sum + val, 0);
-                    });
-
-                    const hue = (index * 360 / questionMetrics.length) % 360;
-                    questionDatasets.push({
-                        label: `${compareWith} - ${metric.replace(/question_/g, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
-                        data: compareSumValues,
-                        borderColor: `hsl(${hue}, 70%, 30%)`,
-                        backgroundColor: `hsla(${hue}, 70%, 30%, 0.1)`,
-                        borderWidth: 2,
-                        fill: false,
-                        tension: 0.3,
-                        pointRadius: 2,
-                        pointHoverRadius: 5,
-                        borderDash: [3, 3]
-                    });
-                });
-            }
-
-            // Add industry comparison for questions
-            if (isIndustryCompare && data.length > 0) {
-                const selectedCompany = document.getElementById('companySelect').value;
-                const companyIndustry = globalData.find(row => row.company === selectedCompany)?.primary_industry;
-                
-                if (companyIndustry) {
-                    questionMetrics.forEach((metric, index) => {
-                        const industrySumValues = quarters.map(quarter => {
-                            // Get ALL companies in the industry for this quarter
-                            const allIndustryCompaniesThisQuarter = globalData.filter(row => 
-                                row.primary_industry === companyIndustry && row.quarter_formatted === quarter
-                            );
-                            const values = allIndustryCompaniesThisQuarter.map(row => row[metric]).filter(val => val !== null && val !== undefined);
-                            return values.reduce((sum, val) => sum + val, 0);
-                        });
-
-                        const hue = (index * 360 / questionMetrics.length) % 360;
-                        questionDatasets.push({
-                            label: `${companyIndustry} Industry - ${metric.replace(/question_/g, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
-                            data: industrySumValues,
-                            borderColor: `hsl(${hue}, 50%, 40%)`,
-                            backgroundColor: `hsla(${hue}, 50%, 40%, 0.1)`,
-                            borderWidth: 2,
-                            fill: false,
-                            tension: 0.3,
-                            pointRadius: 2,
-                            pointHoverRadius: 5,
-                            borderDash: [5, 5]
-                        });
-                    });
-                }
-            }
-
-            questionChart = new Chart(questionCtx, {
+            questionChart = new Chart(document.getElementById('questionChart'), {
                 type: 'line',
-                data: {
-                    labels: quarters,
-                    datasets: questionDatasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'bottom',
-                            labels: {
-                                font: {
-                                    size: 8
-                                },
-                                boxWidth: 8,
-                                usePointStyle: true
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.1)'
-                            },
-                            ticks: {
-                                font: {
-                                    size: 10
-                                }
-                            }
-                        },
-                        x: {
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.1)'
-                            },
-                            ticks: {
-                                font: {
-                                    size: 10
-                                },
-                                maxRotation: 45
-                            }
-                        }
-                    },
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
-                    }
-                }
+                data: { labels, datasets: makeData(qMet, data) },
+                options: { responsive: true, maintainAspectRatio: false }
             });
 
-            // Create Answer Chart
-            const answerCtx = document.getElementById('answerChart').getContext('2d');
-            const answerDatasets = answerMetrics.map((metric, index) => {
-                const sumValues = quarters.map(quarter => {
-                    const values = sortedQuarterData[quarter].map(row => row[metric]).filter(val => val !== null && val !== undefined);
-                    return values.reduce((sum, val) => sum + val, 0);
-                });
-
-                const hue = (index * 360 / answerMetrics.length) % 360;
-                return {
-                    label: metric.replace(/answer_/g, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
-                    data: sumValues,
-                    borderColor: `hsl(${hue}, 70%, 50%)`,
-                    backgroundColor: `hsla(${hue}, 70%, 50%, 0.1)`,
-                    borderWidth: 2,
-                    fill: false,
-                    tension: 0.3,
-                    pointRadius: 3,
-                    pointHoverRadius: 6
-                };
-            });
-
-            // Add comparison datasets for answers if needed
-            if (compareWith !== 'none') {
-                const compareData = globalData.filter(row => row.company === compareWith);
-                const compareQuarterData = compareData.reduce((acc, row) => {
-                    const quarter = row.quarter_formatted;
-                    if (!acc[quarter]) acc[quarter] = [];
-                    acc[quarter].push(row);
-                    return acc;
-                }, {});
-
-                answerMetrics.forEach((metric, index) => {
-                    const compareSumValues = quarters.map(quarter => {
-                        const values = (compareQuarterData[quarter] || []).map(row => row[metric]).filter(val => val !== null && val !== undefined);
-                        return values.reduce((sum, val) => sum + val, 0);
-                    });
-
-                    const hue = (index * 360 / answerMetrics.length) % 360;
-                    answerDatasets.push({
-                        label: `${compareWith} - ${metric.replace(/answer_/g, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
-                        data: compareSumValues,
-                        borderColor: `hsl(${hue}, 70%, 30%)`,
-                        backgroundColor: `hsla(${hue}, 70%, 30%, 0.1)`,
-                        borderWidth: 2,
-                        fill: false,
-                        tension: 0.3,
-                        pointRadius: 2,
-                        pointHoverRadius: 5,
-                        borderDash: [3, 3]
-                    });
-                });
-            }
-
-            // Add industry comparison for answers
-            if (isIndustryCompare && data.length > 0) {
-                const selectedCompany = document.getElementById('companySelect').value;
-                const companyIndustry = globalData.find(row => row.company === selectedCompany)?.primary_industry;
-                
-                if (companyIndustry) {
-                    answerMetrics.forEach((metric, index) => {
-                        const industrySumValues = quarters.map(quarter => {
-                            // Get ALL companies in the industry for this quarter
-                            const allIndustryCompaniesThisQuarter = globalData.filter(row => 
-                                row.primary_industry === companyIndustry && row.quarter_formatted === quarter
-                            );
-                            const values = allIndustryCompaniesThisQuarter.map(row => row[metric]).filter(val => val !== null && val !== undefined);
-                            return values.reduce((sum, val) => sum + val, 0);
-                        });
-
-                        const hue = (index * 360 / answerMetrics.length) % 360;
-                        answerDatasets.push({
-                            label: `${companyIndustry} Industry - ${metric.replace(/answer_/g, '').replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
-                            data: industrySumValues,
-                            borderColor: `hsl(${hue}, 50%, 40%)`,
-                            backgroundColor: `hsla(${hue}, 50%, 40%, 0.1)`,
-                            borderWidth: 2,
-                            fill: false,
-                            tension: 0.3,
-                            pointRadius: 2,
-                            pointHoverRadius: 5,
-                            borderDash: [5, 5]
-                        });
-                    });
-                }
-            }
-
-            answerChart = new Chart(answerCtx, {
+            answerChart = new Chart(document.getElementById('answerChart'), {
                 type: 'line',
-                data: {
-                    labels: quarters,
-                    datasets: answerDatasets
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: true,
-                            position: 'bottom',
-                            labels: {
-                                font: {
-                                    size: 8
-                                },
-                                boxWidth: 8,
-                                usePointStyle: true
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.1)'
-                            },
-                            ticks: {
-                                font: {
-                                    size: 10
-                                }
-                            }
-                        },
-                        x: {
-                            grid: {
-                                color: 'rgba(0, 0, 0, 0.1)'
-                            },
-                            ticks: {
-                                font: {
-                                    size: 10
-                                },
-                                maxRotation: 45
-                            }
-                        }
-                    },
-                    interaction: {
-                        intersect: false,
-                        mode: 'index'
-                    }
-                }
+                data: { labels, datasets: makeData(aMet, data) },
+                options: { responsive: true, maintainAspectRatio: false }
             });
         }
     </script>
